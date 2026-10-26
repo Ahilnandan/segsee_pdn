@@ -1,0 +1,105 @@
+{
+ "qsort": {
+  "tones": [
+   {
+    "MHz": 399.9,
+    "period_cycles": 2.5,
+    "x_above_floor": 23.0
+   },
+   {
+    "MHz": 250.0,
+    "period_cycles": 4.0,
+    "x_above_floor": 4.0
+   },
+   {
+    "MHz": 333.3,
+    "period_cycles": 3.0,
+    "x_above_floor": 12.0
+   },
+   {
+    "MHz": 291.7,
+    "period_cycles": 3.4,
+    "x_above_floor": 5.0
+   },
+   {
+    "MHz": 375.0,
+    "period_cycles": 2.7,
+    "x_above_floor": 7.0
+   }
+  ],
+  "tone_share_current": 0.006120766097914089,
+  "tone_share_droop": 0.00040807632952696523
+ },
+ "dhrystone": {
+  "tones": [
+   {
+    "MHz": 76.9,
+    "period_cycles": 13.0,
+    "x_above_floor": 486.0
+   },
+   {
+    "MHz": 92.3,
+    "period_cycles": 10.8,
+    "x_above_floor": 286.0
+   },
+   {
+    "MHz": 107.7,
+    "period_cycles": 9.3,
+    "x_above_floor": 394.0
+   },
+   {
+    "MHz": 115.5,
+    "period_cycles": 8.7,
+    "x_above_floor": 328.0
+   },
+   {
+    "MHz": 100.1,
+    "period_cycles": 10.0,
+    "x_above_floor": 110.0
+   },
+   {
+    "MHz": 84.7,
+    "period_cycles": 11.8,
+    "x_above_floor": 49.0
+   }
+  ],
+  "tone_share_current": 0.7586036497333305,
+  "tone_share_droop": 0.9347802276479263
+ },
+ "mm": {
+  "tones": [
+   {
+    "MHz": 99.4,
+    "period_cycles": 10.1,
+    "x_above_floor": 114.0
+   },
+   {
+    "MHz": 103.0,
+    "period_cycles": 9.7,
+    "x_above_floor": 14.0
+   },
+   {
+    "MHz": 101.1,
+    "period_cycles": 9.9,
+    "x_above_floor": 13.0
+   },
+   {
+    "MHz": 81.8,
+    "period_cycles": 12.2,
+    "x_above_floor": 14.0
+   },
+   {
+    "MHz": 90.8,
+    "period_cycles": 11.0,
+    "x_above_floor": 5.0
+   },
+   {
+    "MHz": 84.0,
+    "period_cycles": 11.9,
+    "x_above_floor": 7.0
+   }
+  ],
+  "tone_share_current": 0.625497084147167,
+  "tone_share_droop": 0.7300130388636077
+ }
+}

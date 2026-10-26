@@ -1,0 +1,288 @@
+<title>SEGSEE Supply-Noise Results</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;650;750&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: single reading column (~72ch) with wide tables allowed to scroll; summary first, then each mechanism, then what failed, caveats, file index. */
+:root {
+  --bg: #f6f7f5; --panel: #ffffff; --fg: #1d2326; --muted: #5b666b; --rule: #d6dbd9;
+  --accent: #0e6a73; --accent-soft: #d8ecec; --good: #2f7d3a; --bad: #a83b2c; --warn: #9a6a12;
+  --bar0: #a9b3b5; --bar1: #4f8e95; --bar4: #0e6a73;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-data: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121618; --panel: #191f22; --fg: #e3e8e9; --muted: #9aa6aa; --rule: #2d3639;
+  --accent: #5cc1c9; --accent-soft: #1d3638; --good: #74c47f; --bad: #e98a7c; --warn: #e2b75c;
+  --bar0: #5a6467; --bar1: #3f7d84; --bar4: #5cc1c9; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121618; --panel: #191f22; --fg: #e3e8e9; --muted: #9aa6aa; --rule: #2d3639;
+  --accent: #5cc1c9; --accent-soft: #1d3638; --good: #74c47f; --bad: #e98a7c; --warn: #e2b75c;
+  --bar0: #5a6467; --bar1: #3f7d84; --bar4: #5cc1c9; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 17px/1.6 var(--f-body); }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 80px; display: grid; gap: 34px; }
+.read { max-width: 72ch; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: 2.1rem; font-weight: 750; letter-spacing: -0.01em; }
+h2 { font-size: 1.4rem; font-weight: 650; padding-top: 6px; border-top: 2px solid var(--fg); }
+h3 { font-size: 1.05rem; font-weight: 650; }
+p { margin: 0; } ul, ol { margin: 0; padding-left: 1.2em; } li + li { margin-top: 4px; }
+section { display: grid; gap: 14px; min-width: 0; }
+.eyebrow { font: 600 0.72rem/1 var(--f-data); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.meta { color: var(--muted); font-size: 0.92rem; }
+.lede { font-size: 1.12rem; }
+.key { background: var(--panel); border: 1px solid var(--rule); border-left: 4px solid var(--accent); padding: 18px 20px; display: grid; gap: 10px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.kpi { background: var(--panel); border: 1px solid var(--rule); padding: 14px 16px; display: grid; gap: 4px; }
+.kpi b { font: 650 1.55rem/1.1 var(--f-display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 0.86rem; color: var(--muted); line-height: 1.35; }
+.tbl { overflow-x: auto; border: 1px solid var(--rule); background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+th { font: 600 0.74rem/1.3 var(--f-data); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); background: var(--bg); }
+td.n, th.n { text-align: right; font-family: var(--f-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.hl td { background: var(--accent-soft); font-weight: 600; }
+.good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+.chart { background: var(--panel); border: 1px solid var(--rule); padding: 14px; overflow-x: auto; }
+.chart svg { width: 100%; min-width: 640px; height: auto; display: block; }
+.chart .cg { font: 650 13px var(--f-display); fill: var(--fg); }
+.chart .cl { font: 12px var(--f-body); fill: var(--muted); }
+.chart .cv { font: 11px var(--f-data); fill: var(--fg); }
+.chart .ct { font: 10px var(--f-data); fill: var(--muted); }
+.chart .grid { stroke: var(--rule); stroke-width: 1; }
+.chart .b0 { fill: var(--bar0); } .chart .b1 { fill: var(--bar1); } .chart .b4 { fill: var(--bar4); }
+.cap { font-size: 0.84rem; color: var(--muted); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.two > div { background: var(--panel); border: 1px solid var(--rule); padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+code, .mono { font-family: var(--f-data); font-size: 0.86em; }
+a { color: var(--accent); }
+.pill { display: inline-block; font: 600 0.7rem/1 var(--f-data); padding: 4px 7px; border-radius: 3px; letter-spacing: 0.04em; }
+.p-new { background: var(--accent-soft); color: var(--accent); } .p-old { background: var(--rule); color: var(--muted); }
+.p-dead { background: transparent; border: 1px solid var(--bad); color: var(--bad); }
+</style>
+
+<div class="wrap">
+<header style="display:grid;gap:10px">
+  <div class="eyebrow">SEGSEE power project · BOOM PaperMatchBoomV3Config</div>
+  <h1>Supply-noise co-design: compiled results</h1>
+  <p class="meta">Compiled 2026-10-07. All experiments in <code>pdn_work/</code>. Droop numbers are p99.9 per-cycle die-voltage drop unless marked “worst”.</p>
+</header>
+
+<section class="read">
+  <div class="key">
+    <h3>Bottom line</h3>
+    <p class="lede">Three pieces combine. A parallel supply, where an off-chip buck carries DC and a slow-switching FIVR handles transients. A small on-die active bank. One droop predictor in the issue stage that both holds the heaviest instructions and places background work. Together they cut p99.9 droop by <b>55–62%</b> against a conventional 140 MHz FIVR. The FIVR runs <b>4× slower</b>, system efficiency rises <b>2–4 points</b>, and performance cost is <b>0.04–0.5%</b> on single-thread BOOM.</p>
+    <p>Reordering instructions on its own does not reduce droop; it has a hard ceiling of a few percent. The lever is when work issues, decided by a forward prediction from the measured supply.</p>
+  </div>
+</section>
+
+<div class="kpis">
+  <div class="kpi"><b>−55 to −62%</b><span>p99.9 droop vs FIVR-only at 140 MHz, same 5 nF total die capacitance</span></div>
+  <div class="kpi"><b>35 MHz</b><span>FIVR switching frequency, down from 140, with no droop penalty on the parallel supply</span></div>
+  <div class="kpi"><b>+2.4 to +4.3 pts</b><span>system efficiency, 12 V to die (calibrated switching-loss model)</span></div>
+  <div class="kpi"><b>0.04–0.48%</b><span>slowdown with predictor-placed background work plus holds</span></div>
+  <div class="kpi"><b>~2×</b><span>droop reduction of Grochowski et al. (HPCA'02) at matched GA tuning</span></div>
+</div>
+
+<section>
+  <h2>How the gain builds up</h2>
+  <div class="chart"><svg viewBox="0 0 800 391" role="img" aria-label="p99.9 droop by design step for qsort, dhrystone and mm"><line x1="230.0" y1="14" x2="230.0" y2="387" class="grid"/><text x="230.0" y="10" class="ct" text-anchor="middle">0</text><line x1="290.0" y1="14" x2="290.0" y2="387" class="grid"/><text x="290.0" y="10" class="ct" text-anchor="middle">20</text><line x1="350.0" y1="14" x2="350.0" y2="387" class="grid"/><text x="350.0" y="10" class="ct" text-anchor="middle">40</text><line x1="410.0" y1="14" x2="410.0" y2="387" class="grid"/><text x="410.0" y="10" class="ct" text-anchor="middle">60</text><line x1="470.0" y1="14" x2="470.0" y2="387" class="grid"/><text x="470.0" y="10" class="ct" text-anchor="middle">80</text><line x1="530.0" y1="14" x2="530.0" y2="387" class="grid"/><text x="530.0" y="10" class="ct" text-anchor="middle">100</text><line x1="590.0" y1="14" x2="590.0" y2="387" class="grid"/><text x="590.0" y="10" class="ct" text-anchor="middle">120</text><line x1="650.0" y1="14" x2="650.0" y2="387" class="grid"/><text x="650.0" y="10" class="ct" text-anchor="middle">140</text><text x="0" y="28" class="cg">qsort</text><text x="222" y="45" class="cl" text-anchor="end">FIVR only, 140 MHz</text><rect x="230" y="34" width="392.4" height="14" class="b0" rx="2"/><text x="628.4" y="45" class="cv">130.8 mV</text><text x="222" y="64" class="cl" text-anchor="end">Parallel supply, FIVR 35 MHz</text><rect x="230" y="53" width="240.6" height="14" class="b1" rx="2"/><text x="476.6" y="64" class="cv">80.2 mV</text><text x="222" y="83" class="cl" text-anchor="end">+ active bank</text><rect x="230" y="72" width="225.0" height="14" class="b1" rx="2"/><text x="461.0" y="83" class="cv">75.0 mV</text><text x="222" y="102" class="cl" text-anchor="end">+ predictive holds</text><rect x="230" y="91" width="161.7" height="14" class="b1" rx="2"/><text x="397.7" y="102" class="cv">53.9 mV · 0.20% slower</text><text x="222" y="121" class="cl" text-anchor="end">+ predictor-placed background work</text><rect x="230" y="110" width="150.3" height="14" class="b4" rx="2"/><text x="386.3" y="121" class="cv">50.1 mV · 0.04% slower</text><text x="0" y="149" class="cg">dhrystone</text><text x="222" y="166" class="cl" text-anchor="end">FIVR only, 140 MHz</text><rect x="230" y="155" width="298.2" height="14" class="b0" rx="2"/><text x="534.2" y="166" class="cv">99.4 mV</text><text x="222" y="185" class="cl" text-anchor="end">Parallel supply, FIVR 35 MHz</text><rect x="230" y="174" width="188.7" height="14" class="b1" rx="2"/><text x="424.7" y="185" class="cv">62.9 mV</text><text x="222" y="204" class="cl" text-anchor="end">+ active bank</text><rect x="230" y="193" width="159.0" height="14" class="b1" rx="2"/><text x="395.0" y="204" class="cv">53.0 mV</text><text x="222" y="223" class="cl" text-anchor="end">+ predictive holds</text><rect x="230" y="212" width="120.6" height="14" class="b1" rx="2"/><text x="356.6" y="223" class="cv">40.2 mV · 1.59% slower</text><text x="222" y="242" class="cl" text-anchor="end">+ predictor-placed background work</text><rect x="230" y="231" width="113.4" height="14" class="b4" rx="2"/><text x="349.4" y="242" class="cv">37.8 mV · 0.04% slower</text><text x="0" y="270" class="cg">mm</text><text x="222" y="287" class="cl" text-anchor="end">FIVR only, 140 MHz</text><rect x="230" y="276" width="389.7" height="14" class="b0" rx="2"/><text x="625.7" y="287" class="cv">129.9 mV</text><text x="222" y="306" class="cl" text-anchor="end">Parallel supply, FIVR 35 MHz</text><rect x="230" y="295" width="270.0" height="14" class="b1" rx="2"/><text x="506.0" y="306" class="cv">90.0 mV</text><text x="222" y="325" class="cl" text-anchor="end">+ active bank</text><rect x="230" y="314" width="243.9" height="14" class="b1" rx="2"/><text x="479.9" y="325" class="cv">81.3 mV</text><text x="222" y="344" class="cl" text-anchor="end">+ predictive holds</text><rect x="230" y="333" width="182.7" height="14" class="b1" rx="2"/><text x="418.7" y="344" class="cv">60.9 mV · 0.98% slower</text><text x="222" y="363" class="cl" text-anchor="end">+ predictor-placed background work</text><rect x="230" y="352" width="173.7" height="14" class="b4" rx="2"/><text x="409.7" y="363" class="cv">57.9 mV · 0.48% slower</text></svg></div>
+  <p class="cap">Single-thread BOOM, full traces, scheduler co-simulated cycle by cycle inside the Pulsim switching circuit. Each bar adds one piece to the one above it. Same 5 nF total die capacitance throughout; the bank takes 0.5 nF from the passive budget. Background work is 1 op/cycle of needed work (for example AES-CTR pads), identical across rows that use it.</p>
+  <div class="tbl"><table>
+    <tr><th>Configuration</th><th class="n">qsort p99.9 / worst</th><th class="n">dhrystone</th><th class="n">mm</th><th class="n">slowdown</th></tr>
+    <tr><td>FIVR only, 140 MHz, normal issue</td><td class="n">130.8 / 159.5</td><td class="n">99.4 / 143.0</td><td class="n">129.9 / 207.9</td><td class="n">0</td></tr>
+    <tr><td>Parallel supply, FIVR 35 MHz (4× L)</td><td class="n">80.2 / 134.6</td><td class="n">62.9 / 92.5</td><td class="n">90.0 / 113.3</td><td class="n">0</td></tr>
+    <tr><td>+ active bank (4.5 + 0.5 nF)</td><td class="n">75.0 / 122.6</td><td class="n">53.0 / 85.0</td><td class="n">81.3 / 110.4</td><td class="n">0</td></tr>
+    <tr><td>+ predictive holds</td><td class="n">53.9 / 62.3</td><td class="n">40.2 / 51.0</td><td class="n">60.9 / 68.8</td><td class="n">0.20 / 1.59 / 0.98%</td></tr>
+    <tr class="hl"><td>+ predictor-placed background work</td><td class="n">50.1 / 63.8</td><td class="n">37.8 / 56.2</td><td class="n">57.9 / 64.4</td><td class="n">0.04 / 0.04 / 0.48%</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>Apparatus</h2>
+  <div class="two">
+    <div><h3>Core and traces</h3><ul>
+      <li>BOOM <code>PaperMatchBoomV3Config</code> RTL (Verilator): 8-wide dispatch, 96-entry IQ, 384 ROB. BACT_CAND trace logs every ready candidate per cycle.</li>
+      <li>Replay with real dependencies, the real port map and age priority. Oldest-first reproduces hardware timing exactly (dhrystone 87,312 = 87,312 cycles).</li>
+      <li>Power tokens in Chisel (8-bit ROM per uop: 4-bit amplitude, 4-bit duration), verified bit-exact against <code>curmodel.py</code>.</li>
+      <li>SMT-4/8 model of the Fu et al. ICPP'08 machine (8-wide, unified 96-entry IQ, ICOUNT) built from BOOM trace slices.</li>
+    </ul></div>
+    <div><h3>Power delivery</h3><ul>
+      <li>Pulsim (C++ MNA) switching simulation at 50 ps steps, cross-validated against the closed-form model to 1–2%.</li>
+      <li>Off-chip 4-phase buck: 500 kHz, per-core share (K = 250) of a 100 A VR, average-current-mode control.</li>
+      <li>FIVR: 16 phases, natural-sampled double-edge PWM, type-3 loop at 78 MHz / 43° with 0.6 ns delay (Burton APEC'14 class).</li>
+      <li>Package 507 pH / 79.6 mΩ, die 5 nF. Scheduler runs inside the circuit and sees sensed state every cycle.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <h2>1 · Supply topology</h2>
+  <p class="read">Direct path only, FIVR only, and both in parallel feeding the same die node. In the parallel case the off-chip loop nulls the FIVR's average current, so the FIVR carries only 1–7% of DC current.</p>
+  <div class="tbl"><table>
+    <tr><th>p99.9 droop, normal issue</th><th class="n">dhrystone</th><th class="n">mm</th><th class="n">qsort</th></tr>
+    <tr><td>Direct path only</td><td class="n">163.5</td><td class="n">152.5</td><td class="n">138.3</td></tr>
+    <tr><td>FIVR only, 140 MHz</td><td class="n">99.4</td><td class="n">129.9</td><td class="n">130.8</td></tr>
+    <tr><td>FIVR only, 70 MHz (loop at fsw/1.8)</td><td class="n bad">199.1</td><td class="n bad">271.0</td><td class="n bad">349.4</td></tr>
+    <tr class="hl"><td>Parallel, conservative loop (identical at 140 / 70 / 35 MHz)</td><td class="n">63.5</td><td class="n">89.9</td><td class="n">78.9</td></tr>
+    <tr><td>Parallel, fast loop (crossover ~150 MHz, optimistic)</td><td class="n">50.0</td><td class="n">66.8</td><td class="n">68.6</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <tr><th>System efficiency, 12 V to die</th><th class="n">dhrystone</th><th class="n">mm</th><th class="n">qsort</th></tr>
+    <tr><td>Direct path only</td><td class="n">84.6%</td><td class="n warn">74.0% (anomalous)</td><td class="n">85.8%</td></tr>
+    <tr><td>FIVR only, 140 MHz</td><td class="n">82.4%</td><td class="n">81.1%</td><td class="n">80.1%</td></tr>
+    <tr><td>Parallel, 35 MHz with 140 MHz inductor</td><td class="n">82.5%</td><td class="n">82.2%</td><td class="n">80.9%</td></tr>
+    <tr class="hl"><td>Parallel, 35 MHz with 4× inductor</td><td class="n">84.8%</td><td class="n">85.4%</td><td class="n">83.7%</td></tr>
+  </table></div>
+  <p class="cap">Conduction losses are simulated from source currents. FIVR switching loss is calibrated at 2.72 pJ per phase-cycle so that FIVR-only at 140 MHz is 90% efficient. The off-chip VR has 5% switching loss and the 1.8 V rail is made at 90%. At 35 MHz the inductor must scale up, or ripple conduction loss cancels the switching savings.</p>
+</section>
+
+<section>
+  <h2>2 · Faithful FIVR re-test</h2>
+  <p class="read">Earlier results used a weak FIVR. Against the Intel-class model (a 100→400 mA step droops 138 mV vs 356 mV with a slow integrator only), several earlier claims did not survive.</p>
+  <div class="tbl"><table>
+    <tr><th>Claim</th><th>Weak-FIVR result</th><th>Faithful-FIVR result</th><th>Status</th></tr>
+    <tr><td>Active bank replaces passive decap at the same capacitance</td><td>−16 to −34% p99.9</td><td>−2 to +4% (no help)</td><td><span class="pill p-dead">does not hold</span></td></tr>
+    <tr><td>Reactive holds (REGH) + bank</td><td>−56 to −68%</td><td>−38 to −48% p99.9, 2.7–6% slowdown</td><td><span class="pill p-old">holds up</span></td></tr>
+    <tr><td>CPU replaces the FIVR fast loop</td><td>beat a 140 MHz FIVR at 35 MHz</td><td>405–877 mV (holds only), 133–181 mV with dummies</td><td><span class="pill p-dead">fails</span></td></tr>
+    <tr><td>Lower FIVR switching frequency via the CPU</td><td>4× lower</td><td>No bandwidth loss at lower fsw with 16 phases; under the fsw/1.8 rule nothing recovers it</td><td><span class="pill p-dead">fails; parallel supply delivers it instead</span></td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>3 · Does reordering help?</h2>
+  <p class="read">Tested on single-thread BOOM, on an SMT-4/8 model with Fu-et-al.-level choice, and with a perfect-model predictive selector. Every policy issues the same number of ops as oldest-first.</p>
+  <div class="tbl"><table>
+    <tr><th>Test</th><th>Result</th></tr>
+    <tr><td>Single-thread, minimise-bank-need reorder (T)</td><td>No droop change (150.8 → 150.5 mV)</td></tr>
+    <tr><td>Supply-following / spread-spectrum reorder</td><td>Mixed; resonance-band energy unchanged (mm 17.8% → 17.9%)</td></tr>
+    <tr><td>SMT-8, minimise-bank-need reorder</td><td class="good">Bank charge −14 to −22% at ≤0.1% runtime change; droop ±3%</td></tr>
+    <tr><td>SMT-8, state-of-charge-aware selection, half-size bank</td><td class="good">Bank shortfall −28 to −76%</td></tr>
+    <tr><td>SMT, predictive selection with exact PDN model</td><td>p99.9 within ±5% (best −5.6%), worst case mixed</td></tr>
+    <tr><td>Under tuned predictive holds (GA)</td><td>Tie with oldest-first (0.1% fitness)</td></tr>
+  </table></div>
+  <p class="read"><b>Why there is a ceiling.</b> The top 1% of current steps are mostly issue-<i>count</i> rises (+2.2 to +2.4 ops/cycle at ~80 pC each), which a work-conserving selector cannot change. What it can move must still issue within about one resonance period (~10 cycles), so charge per period is nearly conserved. Reordering takes pressure off the bank, but does not reduce droop.</p>
+</section>
+
+<section>
+  <h2>4 · Predictive holds</h2>
+  <p class="read">Each cycle, predict die voltage 13 cycles ahead from the supply's measured impulse response, the current history, the committed tails of in-flight ops, and the candidate picks. If the predicted dip exceeds the target, hold the heaviest picks, one at a time, until it does not. Target = 0.68 × oldest-first p99.9 (GA-tuned). A starvation guard forces an op through after 19 holds.</p>
+  <div class="tbl"><table>
+    <tr><th>Setting</th><th class="n">p99.9</th><th class="n">worst</th><th class="n">slowdown</th></tr>
+    <tr><td>SMT, RLC model, exact predictor, target 0.7×</td><td class="n">−30%</td><td class="n">−37 to −47%</td><td class="n">−0.7 to +1.3%</td></tr>
+    <tr><td>Reactive bank-gated holds (TDH) / issue-ramp limit (RAMP)</td><td class="n">≈0 to +12%</td><td class="n">up to +23%</td><td class="n">≈0</td></tr>
+    <tr class="hl"><td>GA-tuned ours, realistic HW view, held-out mixes</td><td class="n">−19 to −22%</td><td class="n">−23 to −32%</td><td class="n">−0.6 to +0.5%</td></tr>
+    <tr><td>GA-tuned Grochowski et al. HPCA'02, same HW view</td><td class="n">−2 to −6%</td><td class="n">+2 to −11%</td><td class="n">≈0</td></tr>
+    <tr><td>Grochowski at zero latency (ideal), ≤1% slowdown</td><td class="n">−8 to −14%</td><td class="n">—</td><td class="n">≤1%</td></tr>
+    <tr><td>SMT on parallel supply (Pulsim-identified kernel)</td><td class="n">−9 to −16%</td><td class="n">−16 to −41%</td><td class="n">−0.6 to +0.7%</td></tr>
+    <tr><td>Same, RLC stand-in predictor (model mismatch)</td><td class="n">−7 to −11%</td><td class="n">+3 to −15%</td><td class="n">≈0</td></tr>
+    <tr class="hl"><td>SMT, parallel 35 MHz + bank + holds</td><td class="n">−32 to −43%</td><td class="n">−44 to −54%</td><td class="n">≈0</td></tr>
+    <tr><td>Single-thread closed loop, parallel 35 MHz + bank + holds</td><td class="n">−32 to −36%</td><td class="n">−39 to −54%</td><td class="n">0.2–1.6%</td></tr>
+    <tr><td>Single-thread, reactive holds (REGH), same supply</td><td class="n">−35 to −43%</td><td class="n">−37 to −56%</td><td class="n">3.4–9.3%</td></tr>
+  </table></div>
+  <p class="cap">"Realistic HW view" means 4-bit amplitude × 4-bit duration tokens and the PDN state sensed 2 cycles late. GA: population 48, 20 generations per family, 3 training slices, validated on unseen mixes. The identified kernel matters most for the worst case: the RLC stand-in sometimes makes it worse.</p>
+</section>
+
+<section>
+  <h2>5 · Deferred and useful filler work</h2>
+  <p class="read">The same predictor also places work that must happen anyway: into current dips, and away from predicted droops. Because total work is fixed, the droop gain costs no energy.</p>
+  <div class="tbl"><table>
+    <tr><th>Config (single-thread, final supply)</th><th class="n">p99.9</th><th class="n">worst</th><th class="n">overshoot</th><th class="n">slowdown</th><th class="n">extra energy</th></tr>
+    <tr><td>Background work at constant rate (0.5 ops/cycle)</td><td class="n">−1 to 0%</td><td class="n">−5 to +2%</td><td class="n">−11 to −1%</td><td class="n">0</td><td class="n">needed work</td></tr>
+    <tr class="hl"><td>Same work, predictor-placed</td><td class="n">−9 to −13%</td><td class="n">−8 to −14%</td><td class="n">−13 to +8%</td><td class="n">0</td><td class="n">needed work</td></tr>
+    <tr class="hl"><td>Predictor-placed (1 op/cycle) + holds</td><td class="n">−29 to −33%</td><td class="n">−34 to −48%</td><td class="n">−18 to −28%</td><td class="n">0.04–0.48%</td><td class="n">needed work</td></tr>
+    <tr><td>Classic dummy fill + holds</td><td class="n">−23 to −31%</td><td class="n">−24 to −48%</td><td class="n good">−25 to −41%</td><td class="n">0.13–0.84%</td><td class="n bad">6.5–10.8% wasted</td></tr>
+  </table></div>
+  <h3>Redundant execution (DMR) as scheduled work</h3>
+  <p class="read">Every integer op is re-executed within a deadline. Overdue checks reserve ports, which models commit blocking. Coverage is 100% in all rows; the checks add 20–34% charge. Percentages are vs the same core without DMR.</p>
+  <div class="tbl"><table>
+    <tr><th>DMR scheduling</th><th class="n">dhrystone p99.9 / worst</th><th class="n">mm</th><th class="n">qsort</th><th class="n">slowdown</th></tr>
+    <tr><td>Eager (next free port)</td><td class="n bad">+40% / +51%</td><td class="n bad">+44% / +41%</td><td class="n bad">+37% / +21%</td><td class="n">0.1–1.9%</td></tr>
+    <tr><td>Predictor-placed, 64-cycle deadline</td><td class="n">+6% / +24%</td><td class="n">−2% / +6%</td><td class="n">+10% / −1%</td><td class="n">0.1–2.9%</td></tr>
+    <tr class="hl"><td>Predictor-placed + holds</td><td class="n good">−7% / −24%</td><td class="n good">−22% / −31%</td><td class="n good">−18% / −33%</td><td class="n">1.2–3.4%</td></tr>
+  </table></div>
+  <p class="read">Full integer DMR, which normally costs about 40% more droop, ends up with less droop than the unprotected core. Opportunistic overshoot-only re-execution was neutral (±3%, 1–5% coverage). Filler current lands in the next trough of the supply's 7–10-cycle ring.</p>
+</section>
+
+<section>
+  <h2>6 · Clock jitter from supply noise</h2>
+  <div class="tbl"><table>
+    <tr><th>Baseline → final design</th><th class="n">qsort</th><th class="n">dhrystone</th><th class="n">mm</th></tr>
+    <tr><td>Cycle-to-cycle supply change, p99.9</td><td class="n">59.9 → 36.0 mV</td><td class="n">44.1 → 37.0 mV</td><td class="n">61.8 → 37.5 mV</td></tr>
+    <tr><td>Worst cycle-to-cycle change</td><td class="n">82 → 45 mV</td><td class="n">67 → 46 mV</td><td class="n">101 → 51 mV</td></tr>
+    <tr><td>4-cycle supply change, p99.9</td><td class="n">194 → 97 mV</td><td class="n">139 → 78 mV</td><td class="n">196 → 97 mV</td></tr>
+    <tr class="hl"><td>Estimated jitter, p99.9 (0.35 ps/mV, ~300 ps tree)</td><td class="n">21.0 → 12.6 ps</td><td class="n">15.4 → 13.0 ps</td><td class="n">21.6 → 13.1 ps</td></tr>
+  </table></div>
+  <p class="cap">Most of the jitter gain comes from the parallel supply. Holds mainly reduce droop depth, and on dhrystone they slightly raise cycle-to-cycle change (33.2 → 37.0 mV). The ps conversion uses an alpha-power-law sensitivity estimate.</p>
+</section>
+
+<section>
+  <h2>7 · Earlier groundwork</h2>
+  <ul class="read">
+    <li>The HTIF program-load phase was 72–87% of every raw trace and had to be stripped. Real issue contention is 9–47% of active cycles (mean choice set 2–3.5).</li>
+    <li>Closed-loop sensed tokens are required; open-loop token models were about 2× optimistic on slowdown.</li>
+    <li>Real switched-cap charge pump decomposed per execution unit: CSR needs the most decap despite the lowest mean current.</li>
+    <li>Meng &amp; Saleh JSSC 2009 active decap: all five gain-equation examples re-derived exactly.</li>
+    <li>Dummy fill (THF 200) alone: −8 to −16% droop for +3–4% energy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>8 · Novelty</h2>
+  <div class="tbl"><table>
+    <tr><th>Element</th><th>Status</th><th>Closest prior art</th></tr>
+    <tr><td>Droop-triggered issue throttling, PDN-convolution voltage estimate</td><td><span class="pill p-old">prior art</span></td><td>Grochowski, Ayers, Tiwari HPCA'02; Intel DE10297598T5</td></tr>
+    <tr><td>Charge-budget throttling, queue-activity predictors</td><td><span class="pill p-old">prior art</span></td><td>IBM US11625087, US10552250, US7937563</td></tr>
+    <tr><td>Dummy ops, pipeline damping</td><td><span class="pill p-old">prior art</span></td><td>Grochowski; Powell &amp; Vijaykumar ISCA'03</td></tr>
+    <tr><td>Store-on-overshoot / bidirectional buffer bank</td><td><span class="pill p-old">prior art</span></td><td>TI US10523114, NXP US12476539, Richtek US7274177, UCF US7251113</td></tr>
+    <tr><td>Parallel main + fast auxiliary regulator</td><td><span class="pill p-old">prior art</span></td><td>NXP US12476539; envelope-tracking switcher + linear</td></tr>
+    <tr><td>Forward prediction from a measured supply kernel + committed op tails, selective minimal holds</td><td><span class="pill p-new">not found</span></td><td>~2× Grochowski at matched tuning</td></tr>
+    <tr><td>Predictor-placed useful work (encryption pads) as the current-shaping filler</td><td><span class="pill p-new">not found</span></td><td>—</td></tr>
+    <tr><td>Predictor-scheduled DMR checks, reliability without a droop penalty</td><td><span class="pill p-new">not found</span></td><td>Relates to Fu et al. ICPP'08 (IQ reliability)</td></tr>
+    <tr><td>System co-design: parallel supply + bank + one predictor driving holds and filler</td><td><span class="pill p-new">not found</span></td><td>—</td></tr>
+  </table></div>
+  <p class="cap">Self-search of patents and papers read in full; not a legal clearance.</p>
+</section>
+
+<section>
+  <h2>9 · Caveats</h2>
+  <ul class="read">
+    <li>The per-uop current model is approximate (±30–40% absolute). It was rebuilt after the original library was lost. Relative comparisons are the reliable part.</li>
+    <li>The parallel supply's result relies on 16-phase double-edge PWM passing control content above fsw. With a stricter modulator it may weaken.</li>
+    <li>Switches are ideal. Switching loss is calibrated, not simulated, and PWM chatter at 4× L (~1.6× transitions) is not charged.</li>
+    <li>SMT results come from a replay model built on single-thread BOOM traces, not SMT RTL. Single-thread results use real BOOM ports and dependencies.</li>
+    <li>The predictor is a 256-tap convolution plus a 13×10 effect matrix. It needs a low-order IIR and a per-token droop-signature ROM to fit the issue-select path; hardware cost is not yet measured.</li>
+    <li>Supply is a per-core share on one lumped die node: no multi-core rail and no spatial grid. The 1.8 V rail in the parallel case is ideal.</li>
+    <li>Workloads are qsort, dhrystone and mm. There are no SPEC runs and no power-virus stressmarks yet.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>10 · Next steps toward a paper</h2>
+  <ol class="read">
+    <li>Gate-level per-cycle power from BOOM in ASAP7 (Chipyard Hammer); refit the power-token ROM from it.</li>
+    <li>SPEC CPU2017 SimPoints plus di/dt stressmarks, since the guardband is set by adversarial code.</li>
+    <li>Multi-core shared rail and a published PDN profile; validate Pulsim against ngspice.</li>
+    <li>Chisel predictor (IIR plus droop-signature ROM) synthesised for area and timing.</li>
+    <li>Full GA-tuned baseline suite, including adaptive clock stretching, and end-to-end energy/performance at iso-guardband.</li>
+    <li>Sensitivity: kernel drift, token error, latency, bank size, fsw, decap budget.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Files</h2>
+  <div class="tbl"><table>
+    <tr><th>Topic</th><th>Code</th><th>Data</th></tr>
+    <tr><td>Supply chain model (cases A, B, D), bank, energy</td><td><code>pdnchain.py</code>, <code>t3design.py</code></td><td>—</td></tr>
+    <tr><td>Faithful FIVR re-test</td><td><code>fivr_exp.py</code></td><td><code>fivr_exp.jsonl</code></td></tr>
+    <tr><td>Parallel supply, efficiency</td><td><code>par_exp.py</code>, <code>par_energy.py</code></td><td><code>par_exp.jsonl</code>, <code>par_energy.json</code></td></tr>
+    <tr><td>SMT model, reorder, SOC, MPC</td><td><code>smt_replay.py</code>, <code>smt_exp.py</code>, <code>soc_exp.py</code>, <code>mpc_exp.py</code></td><td><code>smt_exp*.jsonl</code>, <code>soc_exp.jsonl</code>, <code>mpc_exp.jsonl</code></td></tr>
+    <tr><td>Predictive holds, GA head-to-head</td><td><code>hold_exp.py</code>, <code>ga_exp.py</code></td><td><code>hold_exp.jsonl</code>, <code>ga_champions.json</code>, <code>ga_validate.jsonl</code></td></tr>
+    <tr><td>Supply kernels, holds on parallel supply</td><td><code>ident.py</code>, <code>ident2.py</code>, <code>hold_par.py</code>, <code>hold_par2.py</code></td><td><code>kernels.json</code>, <code>hold_par*.jsonl</code></td></tr>
+    <tr><td>Single-thread closed loop, filler, DMR, jitter</td><td><code>replay2.py</code>, <code>st_exp.py</code>, <code>wb_exp.py</code>, <code>dmr_exp.py</code>, <code>jitter_exp.py</code></td><td><code>st_exp.jsonl</code>, <code>wb_exp.jsonl</code>, <code>dmr_exp.jsonl</code>, <code>jitter_exp.json</code></td></tr>
+    <tr><td>Prior-art report</td><td colspan="2"><code>docs/prior-art-report.md</code></td></tr>
+  </table></div>
+</section>
+</div>

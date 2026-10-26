@@ -1,0 +1,33 @@
+=== mm: 200905 issue events after HTIF cut (load-phase gap 451848 cyc) ===
+apparatus check: replay-A vs real HW issue times -> max |dI| 0.00 mA, cycles 170653 vs 170652
+5-cycle rise pctl (mA): p50 10 p90 176 p99 271 p99.9 321 max 434
+
+TH=60 mA: 18540 events = 1 per 9 cycles; gap p10/p25/p50 5/5/7 cyc; q p50 340 pC p99 642 pC; mean demand 33.69 mA
+            bank    Ir | policy  events  fully served  uncovered  slowdown
+          250 pC    5mA |      A   18540          0.6%      85.2%     0.00%
+          250 pC    5mA |      T   18540          0.6%      85.2%     0.00%
+          250 pC    5mA |     TD    8931          9.4%      65.3%     0.00%
+          250 pC   10mA |      A   18540          8.0%      71.1%     0.00%
+          250 pC   10mA |      T   18540          8.0%      71.1%     0.00%
+          250 pC   10mA |     TD   10951         43.0%      40.5%     0.00%
+          250 pC   25mA |      A   18540         30.8%      43.1%     0.00%
+          250 pC   25mA |      T   18540         30.8%      43.1%     0.00%
+          250 pC   25mA |     TD   16856         78.3%      12.0%     0.00%
+          500 pC   10mA |      A   18540          8.5%      70.4%     0.00%
+          500 pC   10mA |      T   18540          8.5%      70.4%     0.00%
+          500 pC   10mA |     TD   15128         31.5%      45.0%     0.00%
+
+TH=100 mA: 14860 events = 1 per 11 cycles; gap p10/p25/p50 5/5/9 cyc; q p50 398 pC p99 642 pC; mean demand 33.51 mA
+            bank    Ir | policy  events  fully served  uncovered  slowdown
+          250 pC    5mA |      A   14860          0.0%      85.2%     0.00%
+          250 pC    5mA |      T   14860          0.0%      85.2%     0.00%
+          250 pC    5mA |     TD     664          0.0%      54.3%     0.00%
+          250 pC   10mA |      A   14860          0.0%      73.2%     0.00%
+          250 pC   10mA |      T   14860          0.0%      73.2%     0.00%
+          250 pC   10mA |     TD     664          0.0%      47.1%     0.00%
+          250 pC   25mA |      A   14860          0.0%      48.4%     0.00%
+          250 pC   25mA |      T   14860          0.0%      48.4%     0.00%
+          250 pC   25mA |     TD     664          0.0%      37.6%     0.00%
+          500 pC   10mA |      A   14860          4.9%      70.6%     0.00%
+          500 pC   10mA |      T   14860          4.9%      70.6%     0.00%
+          500 pC   10mA |     TD    5201         93.2%       5.5%     0.00%

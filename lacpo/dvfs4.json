@@ -1,0 +1,76 @@
+[
+ {
+  "name": "A  off-chip sets V (20 mV/us)",
+  "up_ns": 5439.0,
+  "dn_ns": 5541.0,
+  "p999": 110.22697961330634,
+  "loss": 0.0,
+  "over": 42.736673355102454,
+  "under": 52.44159698486328,
+  "area": 0.4000000000000001
+ },
+ {
+  "name": "A  off-chip sets V (50 mV/us)",
+  "up_ns": 8676.0,
+  "dn_ns": 14127.0,
+  "p999": 108.92741507291807,
+  "loss": 0.0,
+  "over": 42.63808727264396,
+  "under": 57.48194456100464,
+  "area": 0.4000000000000001
+ },
+ {
+  "name": "B  role swap: off-chip -> current helper in transitions, on-die regulates",
+  "up_ns": 975.0,
+  "dn_ns": 5346.0,
+  "p999": 90.37390452051841,
+  "loss": 5.711800137299025,
+  "over": 73.94042015075675,
+  "under": 86.02803945541382,
+  "area": 0.45200000000000007
+ },
+ {
+  "name": "B2 permanent: off-chip current helper, on-die regulator",
+  "up_ns": 4104.0,
+  "dn_ns": 4509.0,
+  "p999": 84.15663569594005,
+  "loss": 13.260466224992612,
+  "over": 33.999586105346594,
+  "under": 48.47991466522217,
+  "area": 0.45200000000000007
+ },
+ {
+  "name": "C  on-die FIVR only (series), 100 nH 4ph 100 MHz fc 20 MHz",
+  "note": "see FIVR-only results in dvfs3 (pdn3); series-FIVR plumbing not in pdn4"
+ },
+ {
+  "name": "D  series LDO, rail +80 mV follows off-chip",
+  "up_ns": 3636.0,
+  "dn_ns": 105.0,
+  "p999": 47.54106402397189,
+  "loss": 10.286894797048383,
+  "over": -2.6088714599610263,
+  "under": 34.876227378845215,
+  "area": 0.56
+ },
+ {
+  "name": "D2 series LDO, rail +80 mV pre-raised 6 us ahead",
+  "up_ns": 138.0,
+  "dn_ns": 105.0,
+  "p999": 35.962967574596746,
+  "loss": 10.932549026210376,
+  "over": -2.656912803649991,
+  "under": 34.08229351043701,
+  "area": 0.56
+ },
+ {
+  "name": "E  A + parallel LDO clamp (1.2 V rail)",
+  "up_ns": 6228.0,
+  "dn_ns": 5538.0,
+  "p999": 92.71080374717803,
+  "loss": 3.03387881511387,
+  "over": 36.050343513488684,
+  "under": 33.15848112106323,
+  "area": 0.44666666666666677
+ }
+]

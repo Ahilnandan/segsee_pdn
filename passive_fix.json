@@ -1,0 +1,380 @@
+{
+ "baseline: 5 nF die, 507 pH package": {
+  "Zpk": [
+   1155,
+   92
+  ],
+  "droop": {
+   "qsort": [
+    108.2,
+    175.8
+   ],
+   "dhrystone": [
+    89.1,
+    134.1
+   ],
+   "mm": [
+    132.1,
+    170.9
+   ]
+  },
+  "area_mm2": 0.0
+ },
+ "(a) die C 10 nF": {
+  "Zpk": [
+   597,
+   65
+  ],
+  "droop": {
+   "qsort": [
+    80.4,
+    97.4
+   ],
+   "dhrystone": [
+    62.8,
+    88.2
+   ],
+   "mm": [
+    70.4,
+    106.7
+   ]
+  },
+  "area_mm2": 0.4166666666666667
+ },
+ "(a) die C 20 nF": {
+  "Zpk": [
+   317,
+   45
+  ],
+  "droop": {
+   "qsort": [
+    46.0,
+    54.4
+   ],
+   "dhrystone": [
+    42.9,
+    59.3
+   ],
+   "mm": [
+    43.6,
+    52.2
+   ]
+  },
+  "area_mm2": 1.2500000000000002
+ },
+ "(a) die C 40 nF": {
+  "Zpk": [
+   230,
+   0
+  ],
+  "droop": {
+   "qsort": [
+    26.9,
+    32.9
+   ],
+   "dhrystone": [
+    30.7,
+    40.1
+   ],
+   "mm": [
+    26.9,
+    35.2
+   ]
+  },
+  "area_mm2": 2.916666666666667
+ },
+ "(b) package L 250 pH (x2 power bumps)": {
+  "Zpk": [
+   1043,
+   121
+  ],
+  "droop": {
+   "qsort": [
+    89.5,
+    150.7
+   ],
+   "dhrystone": [
+    78.3,
+    118.5
+   ],
+   "mm": [
+    87.5,
+    118.8
+   ]
+  },
+  "area_mm2": 0.0
+ },
+ "(b) package L 125 pH (x4 power bumps)": {
+  "Zpk": [
+   931,
+   151
+  ],
+  "droop": {
+   "qsort": [
+    71.8,
+    104.1
+   ],
+   "dhrystone": [
+    55.6,
+    92.3
+   ],
+   "mm": [
+    63.9,
+    82.8
+   ]
+  },
+  "area_mm2": 0.0
+ },
+ "(c) damped decap C_d 2.5 nF + R_d 200 mOhm": {
+  "Zpk": [
+   690,
+   75
+  ],
+  "droop": {
+   "qsort": [
+    86.8,
+    111.1
+   ],
+   "dhrystone": [
+    70.1,
+    97.1
+   ],
+   "mm": [
+    79.0,
+    122.8
+   ]
+  },
+  "area_mm2": 0.20833333333333334
+ },
+ "(c) damped decap C_d 2.5 nF + R_d 450 mOhm": {
+  "Zpk": [
+   613,
+   77
+  ],
+  "droop": {
+   "qsort": [
+    80.9,
+    107.3
+   ],
+   "dhrystone": [
+    67.0,
+    89.7
+   ],
+   "mm": [
+    74.1,
+    115.5
+   ]
+  },
+  "area_mm2": 0.20833333333333334
+ },
+ "(c) damped decap C_d 5.0 nF + R_d 200 mOhm": {
+  "Zpk": [
+   458,
+   66
+  ],
+  "droop": {
+   "qsort": [
+    66.1,
+    80.7
+   ],
+   "dhrystone": [
+    55.2,
+    77.0
+   ],
+   "mm": [
+    61.4,
+    89.5
+   ]
+  },
+  "area_mm2": 0.4166666666666667
+ },
+ "(c) damped decap C_d 5.0 nF + R_d 450 mOhm": {
+  "Zpk": [
+   426,
+   76
+  ],
+  "droop": {
+   "qsort": [
+    64.2,
+    81.5
+   ],
+   "dhrystone": [
+    55.8,
+    77.2
+   ],
+   "mm": [
+    59.5,
+    90.1
+   ]
+  },
+  "area_mm2": 0.4166666666666667
+ },
+ "(c) damped decap C_d 10.0 nF + R_d 200 mOhm": {
+  "Zpk": [
+   285,
+   58
+  ],
+  "droop": {
+   "qsort": [
+    45.9,
+    53.7
+   ],
+   "dhrystone": [
+    43.0,
+    59.3
+   ],
+   "mm": [
+    43.8,
+    57.4
+   ]
+  },
+  "area_mm2": 0.8333333333333334
+ },
+ "(c) damped decap C_d 10.0 nF + R_d 450 mOhm": {
+  "Zpk": [
+   345,
+   85
+  ],
+  "droop": {
+   "qsort": [
+    53.3,
+    68.6
+   ],
+   "dhrystone": [
+    48.7,
+    69.3
+   ],
+   "mm": [
+    50.3,
+    74.8
+   ]
+  },
+  "area_mm2": 0.8333333333333334
+ },
+ "(c*) best damped decap": {
+  "Zpk": [
+   285,
+   58
+  ],
+  "droop": {
+   "qsort": [
+    45.9,
+    53.7
+   ],
+   "dhrystone": [
+    43.0,
+    59.3
+   ],
+   "mm": [
+    43.8,
+    57.4
+   ]
+  },
+  "area_mm2": 0.8333333333333334
+ },
+ "(a) iso-area: +5 nF plain die cap": {
+  "Zpk": [
+   597,
+   65
+  ],
+  "droop": {
+   "qsort": [
+    80.4,
+    97.4
+   ],
+   "dhrystone": [
+    62.8,
+    88.2
+   ],
+   "mm": [
+    70.4,
+    106.7
+   ]
+  },
+  "area_mm2": 0.4166666666666667
+ },
+ "(c) iso-area: +5 nF damped (R_d best)": {
+  "Zpk": [
+   458,
+   66
+  ],
+  "droop": {
+   "qsort": [
+    66.1,
+    80.7
+   ],
+   "dhrystone": [
+    55.2,
+    77.0
+   ],
+   "mm": [
+    61.4,
+    89.5
+   ]
+  },
+  "area_mm2": 0.4166666666666667
+ },
+ "(c) ZERO extra area: 30% of the 5 nF as damped branch (R_d 1000 mOhm)": {
+  "Zpk": [
+   846,
+   99
+  ],
+  "droop": {
+   "qsort": [
+    94.4,
+    154.5
+   ],
+   "dhrystone": [
+    81.6,
+    121.6
+   ],
+   "mm": [
+    105.8,
+    155.3
+   ]
+  },
+  "area_mm2": 0.0
+ },
+ "(c) ZERO extra area: 50% of the 5 nF as damped branch (R_d 450 mOhm)": {
+  "Zpk": [
+   707,
+   98
+  ],
+  "droop": {
+   "qsort": [
+    87.1,
+    138.6
+   ],
+   "dhrystone": [
+    75.8,
+    110.8
+   ],
+   "mm": [
+    90.3,
+    143.5
+   ]
+  },
+  "area_mm2": 0.0
+ },
+ "(b)+(c) 250 pH package + best damped decap": {
+  "Zpk": [
+   232,
+   85
+  ],
+  "droop": {
+   "qsort": [
+    36.0,
+    47.6
+   ],
+   "dhrystone": [
+    31.4,
+    45.9
+   ],
+   "mm": [
+    33.9,
+    50.5
+   ]
+  },
+  "area_mm2": 0.8333333333333334
+ }
+}

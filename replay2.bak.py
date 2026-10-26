@@ -1,0 +1,209 @@
+"""Dependency-aware counterfactual issue replay on real BOOM ready sets (BACT_CAND),
+with an on-die switched-cap bank (token bucket) and a series-RLC droop check.
+
+Uop instance i: ready r_i and grant t_i from the real trace; producers = latest instance
+with pdst==prs issued at t_p <= r_i within LWIN cycles (conservative: may include false
+deps across int/FP files, which only makes reordering look MORE expensive).
+Counterfactual ready'_i = r_i + max(0, max_p (t'_p - t_p)); never earlier than r_i.
+
+Bank: holds I_net[t] <= min(I_net[t-W:t]) + TH (a slew clamp on the fast edge) while it
+has charge; each cycle refills Ir pC (1 GHz core) up to Qb. Charge drawn = injected mA*1ns.
+Policies (per cycle, all issue queues jointly, width/FU caps from the trace):
+  A  : oldest-first (priority = real grant time -> reproduces hardware exactly)
+  T  : if the bank cannot cover A's pick, choose the same NUMBER of uops minimising the
+       charge the bank would need (pure reorder, work-conserving)
+  TD : T, then hold uops back until the need fits the tokens; a uop held MAXD times is forced
+  Bank Qb=0 + TD == pipeline damping (P1-style slew limiting, no active decap)."""
+import sys, numpy as np, heapq
+from collections import defaultdict, Counter
+from scipy.linalg import expm
+from candparse import parse
+from curmodel import SHAPE, FLOOR
+W=5; LWIN=10**9; MAXD=6; H=6   # LWIN: no window -- a preg cannot be reallocated while a consumer is in flight
+WIDTH={1:4,2:2,4:2}
+
+def build(inst):
+    n=len(inst); last={}; prods=[[] for _ in range(n)]
+    order=sorted(range(n),key=lambda i:inst[i][7])
+    # producers: process in real grant order; lookup uses latest issued pdst writer with t_p<=r_i
+    hist=defaultdict(list)                       # pdst -> list of (t_p, idx) increasing
+    for i in order:
+        iq,u,fu,rob,pd,prs,r,t=inst[i]
+        for p in prs:
+            if p==0: continue
+            h=hist.get(p)
+            if not h: continue
+            k=len(h)-1
+            while k>=0 and h[k][0]>=r: k-=1
+            if k>=0 and r-h[k][0]<=LWIN: prods[i].append(h[k][1])
+        if pd!=0: hist[pd].append((t,i))
+    cons=[[] for _ in range(n)]
+    for i,ps in enumerate(prods):
+        for p in set(ps): cons[p].append(i)
+    return prods,cons
+
+# Real PaperMatch port map (execution-units.scala is_nth with int_width=4; fp-pipeline w==0)
+FU_ALU,FU_JMP,FU_MEM,FU_MUL,FU_DIV,FU_CSR,FU_FPU,FU_FDV,FU_I2F,FU_F2I=1,2,4,8,16,32,64,128,256,512
+PORTS={1:[FU_ALU|FU_JMP|FU_I2F, FU_ALU|FU_CSR, FU_ALU|FU_MUL, FU_ALU|FU_DIV],
+       2:[FU_MEM, FU_MEM],
+       4:[FU_FPU|FU_FDV|FU_F2I, FU_FPU]}
+
+def unwrap_age(inst, R=384):
+    """program-order age from wrapped rob_idx (in-flight span < ROB size)."""
+    order=sorted(range(len(inst)),key=lambda i:inst[i][7]); age=[0]*len(inst); ref=None
+    for i in order:
+        rb=inst[i][3]
+        if ref is None: v=rb
+        else:
+            k=(ref-rb)//R; v=min((rb+(k+j)*R for j in (-1,0,1,2)),key=lambda x:abs(x-ref))
+        age[i]=v; ref=v if ref is None else max(ref,v)
+    return age
+
+def port_fill(order, fu, iq, busy_ok):
+    """BOOM greedy: each uop (age order) takes the lowest free port whose fu mask matches."""
+    used={q:[False]*len(p) for q,p in PORTS.items()}; out=[]
+    for i in order:
+        q=iq[i]; P=PORTS[q]
+        for w in range(len(P)):
+            if not used[q][w] and (fu[i] & busy_ok(q,w,P[w])):
+                used[q][w]=True; out.append(i); break
+    return out
+
+def feasible(sel, fu, iq, busy_ok):
+    """exact bipartite check: can every uop in sel get a distinct compatible port?"""
+    by={}
+    for i in sel: by.setdefault(iq[i],[]).append(i)
+    for q,us in by.items():
+        P=[busy_ok(q,w,m) for w,m in enumerate(PORTS[q])]
+        if len(us)>len(P): return False
+        match=[-1]*len(P)
+        def aug(u,seen):
+            for w in range(len(P)):
+                if fu[u]&P[w] and not seen[w]:
+                    seen[w]=True
+                    if match[w]<0 or aug(match[w],seen): match[w]=u; return True
+            return False
+        for u in us:
+            if not aug(u,[False]*len(P)): return False
+    return True
+
+DIVLAT=None
+def run(inst, prods, cons, age, pin, pol, TH, Qb, Ir, vdd_recharge=False, rob=384):
+    n=len(inst); t0=min(x[6] for x in inst)
+    r=np.array([x[6] for x in inst])-t0; treal=np.array([x[7] for x in inst])-t0
+    r=np.where(pin, treal, r)                       # pinned: unobservable structural stall persists
+    iq=[x[0] for x in inst]; fu=[x[2] for x in inst]; sh=[SHAPE.get(x[1],SHAPE[0]) for x in inst]
+    pend=np.array([len(set(p)) for p in prods]); dmax=np.zeros(n,np.int64)
+    tnew=np.full(n,-1,np.int64); held=np.zeros(n,np.int64)
+    L=int(treal.max())*3+1000; I=np.full(L,FLOOR); In=np.full(L,FLOOR); inj=np.zeros(L)
+    busy_ok=lambda q,w,m: m                        # busy units handled via pinning
+    wake=defaultdict(list)
+    for i in range(n):
+        if pend[i]==0: wake[int(r[i])].append(i)
+    # ROB-capacity gate: a uop may not become ready while any uop >= `rob` slots older is unissued
+    # (real ROB frees at commit, after issue, so this is an optimistic/lower-bound constraint).
+    uages=sorted(set(age)); cnt=Counter(age); ptr=0; gated=[]; ngate=0
+    ready=[]; done=0; t=0; tok=float(Qb); drawn=0.0; ev=0; evfull=0; unc=0.0; inev=False; short=False
+    nsel=0; nchg=0; nhold=0
+    lastdone=0; lastprog=0
+    while done<n:
+        if done!=lastdone: lastdone=done; lastprog=t
+        if t-lastprog>5000 or t>=L-50: raise RuntimeError(f'stall at t={t} done={done}/{n} ready={len(ready)} gated={len(gated)}')
+        if t in wake:
+            for i in wake.pop(t):
+                if ptr<len(uages) and age[i]-rob>=uages[ptr]: heapq.heappush(gated,(age[i],i)); ngate+=1
+                else: ready.append(i)
+        pick=[]
+        if ready:
+            ready.sort(key=lambda i:age[i])
+            lo=In[max(0,t-W):t].min() if t>0 else FLOOR
+            def need(sel):
+                proj=I[t:t+H].copy()
+                for i in sel: s=sh[i]; m=min(len(s),H); proj[:m]+=s[:m]
+                return float(np.maximum(0,proj[:W]-(lo+TH)).sum())
+            base=port_fill(ready,fu,iq,busy_ok); pick=base
+            if pol!='A' and base and need(base)>tok+Ir:
+                nsel+=1
+                sel=[]; pool=list(ready)
+                while len(sel)<len(base):
+                    best=None; bv=None
+                    for i in pool:
+                        if not feasible(sel+[i],fu,iq,busy_ok): continue
+                        v=need(sel+[i])
+                        if bv is None or v<bv-1e-9: best,bv=i,v
+                    if best is None: break
+                    sel.append(best); pool.remove(best)
+                if len(sel)==len(base) and need(sel)<need(base)-1e-9: pick=sel
+                if pol=='TD':
+                    forced=[i for i in pick if held[i]>=MAXD]
+                    rest=sorted([i for i in pick if held[i]<MAXD],key=lambda i:-sh[i].sum())
+                    kept=list(forced)
+                    for i in reversed(rest):                  # cheapest first
+                        if need(kept+[i])<=tok+Ir: kept.append(i)
+                    if len(kept)<len(pick): nhold+=1
+                    pick=kept
+                    for i in base:
+                        if i not in pick: held[i]+=1
+                if set(pick)!=set(base): nchg+=1
+        for i in pick:
+            ready.remove(i); tnew[i]=t; s=sh[i]; I[t:t+len(s)]+=s; done+=1; cnt[age[i]]-=1
+            d=t-treal[i]
+            for c in cons[i]:
+                if d>dmax[c]: dmax[c]=d
+                pend[c]-=1
+                if pend[c]==0: wake[int(max(r[c]+max(0,dmax[c]),t+1))].append(c)
+        while ptr<len(uages) and cnt[uages[ptr]]==0: ptr+=1
+        while gated and (ptr>=len(uages) or gated[0][0]-rob<uages[ptr]):
+            wake[t+1].append(heapq.heappop(gated)[1])
+        tok=min(float(Qb),tok+Ir)
+        lo=In[max(0,t-W):t].min() if t>0 else FLOOR
+        ex=max(0.0,I[t]-(lo+TH)); b=0.0
+        if ex>0:
+            b=min(ex,tok); tok-=b; drawn+=b; inj[t]=b; unc+=ex-b
+            if not inev: ev+=1; inev=True; short=False
+            if b<ex-1e-9: short=True
+        elif inev:
+            evfull+= (not short); inev=False
+        In[t]=I[t]-b
+        if vdd_recharge and tok<Qb: In[t]+=min(Ir,Qb-tok)
+        t+=1
+    end=t+40
+    return dict(tnew=tnew,treal=treal,I=I[:end],In=In[:end],makespan=int(tnew.max()),
+                events=ev,evfull=evfull,unc=unc,drawn=drawn,nsel=nsel,nchg=nchg,nhold=nhold,ngate=ngate)
+
+def calibrate(inst, prods, cons, age, maxit=30):
+    """pin uops the port model would issue EARLIER than hardware (unobservable busy/pause
+    stalls) to their real time; iterate to a fixed point. Returns pin mask."""
+    pin=np.zeros(len(inst),bool)
+    for it in range(maxit):
+        R=run(inst,prods,cons,age,pin,'A',1e9,0,0)
+        d=R['tnew']-R['treal']; early=(d<0)&~pin
+        if not early.any() and not (d!=0).any(): return pin,it
+        pin|=early
+        if not early.any(): break
+    return pin,it
+
+def droop(Iamp_mA, L=507e-12, C=5e-9, R=79.6e-3, dt=1e-9, sub=4):
+    """series-RLC PDN, exact ZOH discretisation on sub-steps; returns droop trace (mV) vs DC-at-floor."""
+    A=np.array([[-R/L,-1/L],[1/C,0.0]]); B=np.array([0.0,-1/C]); h=dt/sub
+    M=np.zeros((3,3)); M[:2,:2]=A*h; M[:2,2]=B*h; E=expm(M); Ad=E[:2,:2]; Bd=E[:2,2]
+    I=np.asarray(Iamp_mA)*1e-3; i0=I[0]
+    x=np.array([i0,-R*i0]); out=np.empty(len(I))    # state: inductor current, die-voltage deviation
+    for k in range(len(I)):
+        u=I[k]; mn=0.0
+        for _ in range(sub):
+            x=Ad@x+Bd*u; mn=min(mn,x[1])
+        out[k]=mn
+    return -out*1e3
+
+if __name__=='__main__':
+    wl=sys.argv[1]
+    inst,gap=parse(f'traces/pm2_{wl}.log.gz')
+    prods,cons=build(inst); age=unwrap_age(inst)
+    pin,it=calibrate(inst,prods,cons,age)
+    R=run(inst,prods,cons,age,pin,'A',1e9,0,0)
+    d=R['tnew']-R['treal']
+    print(f"{wl}: {len(inst)} uops; pinned {pin.sum()} ({100*pin.mean():.2f}%) after {it} iters; "
+          f"check1 A==HW: moved {int((d!=0).sum())}, max|d| {int(np.abs(d).max())}, makespan {R['makespan']} vs {int(R['treal'].max())}")
+    from collections import Counter
+    print("  pinned by fu_code:",Counter(inst[i][2] for i in np.nonzero(pin)[0]).most_common(6))

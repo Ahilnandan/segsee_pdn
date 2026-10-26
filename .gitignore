@@ -1,0 +1,16 @@
+# large or derived binaries
+*.npy
+*.npz
+*.pkl
+*.so
+*.vcd
+*.gz
+*.pyc
+__pycache__/
+# logs and partial results
+*.log
+*.err
+*.partial.jsonl
+# raw traces and archived (superseded) runs
+traces/
+archive_*/

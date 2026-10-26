@@ -1,0 +1,32 @@
+{
+ "off": {
+  "entry25_down_ns": 4614.0,
+  "entry25_up_ns": 4695.0,
+  "steady_err_down_mV": -7.82,
+  "steady_err_up_mV": 7.54,
+  "min_down_mV": -16.8379545211792,
+  "max_down_mV": 106.0115098953247,
+  "max_up_mV": 16.568088531494052,
+  "min_up_mV": -110.50591468811044
+ },
+ "reg2": {
+  "entry25_down_ns": 4299.0,
+  "entry25_up_ns": 3390.0,
+  "steady_err_down_mV": -8.57,
+  "steady_err_up_mV": 2.17,
+  "min_down_mV": -19.092917442321777,
+  "max_down_mV": 102.0280122756958,
+  "max_up_mV": 23.974919319152743,
+  "min_up_mV": -110.98078489303597
+ },
+ "inj1": {
+  "entry25_down_ns": null,
+  "entry25_up_ns": 0.0,
+  "steady_err_down_mV": 101.03,
+  "steady_err_up_mV": 1.76,
+  "min_down_mV": 95.4749584197998,
+  "max_down_mV": 106.20570182800293,
+  "max_up_mV": 6.926798820495517,
+  "min_up_mV": -3.6316871643067294
+ }
+}
