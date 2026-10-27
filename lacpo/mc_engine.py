@@ -124,12 +124,14 @@ def coordinate(cores, cands, t, S_hist, st, prm, vsens):
     return out
 
 
-def run_mc(engs, starts, design1, W=60000, coord=None, rob=80, warm=600, q_mV=5.0, sensor_delay=2):
+def run_mc(engs, starts, design1, W=60000, coord=None, rob=80, warm=600, q_mV=5.0, sensor_delay=2, clock=None):
+    import policy6 as P6
     nc = len(engs); assert nc == pdn7.NCORE
     cores = [Core(engs[k], starts[k], starts[k] + W, rob) for k in range(nc)]
     d4 = pdn7.place_design(design1); has_bank = bool(d4.get('bank'))
     sim = pdn7.Sim(d4, Im_A=pdn7.place([c.BG[:3000].mean(0) for c in cores]) * 1e-3)
     prm = dict(CDEF, **(coord or {})); on = coord is not None and prm['budget'] is not None
+    cmod = P6.ClockMod(dict(P6.DEF, **(clock or {})), VNOM=pdn7.VNOM) if clock else None; pend_str = set()
     st = dict(ew=[0.0] * nc, lag=[0] * nc); S_hist = []; vq = collections.deque([pdn7.VNOM] * sensor_delay, maxlen=sensor_delay)
     vw, itot, ipred = [], [], []; arm = np.zeros((1, pdn7.T), np.uint8); vref = np.array([pdn7.VNOM]); nheld = 0; t = 0
     while any(c.active(t) for c in cores):
@@ -139,15 +141,32 @@ def run_mc(engs, starts, design1, W=60000, coord=None, rob=80, warm=600, q_mV=5.
         It = [c.issue(t, p, h) for c, (p, h) in zip(cores, pk)]; nheld += sum(len(h) for _, h in pk)
         S_hist.append(sum(c.Ihat[t] for c in cores))
         Id = pdn7.place(It)
+        str_this = False
+        if cmod is not None:
+            str_this, s_t = cmod.step_begin(t, pend_str)
+            if str_this:
+                Id = pdn7.LEAK_T + np.maximum(Id - pdn7.LEAK_T, 0) / (1 + s_t)
         vmin, _, _ = sim.run(Id[None, :].astype(np.float32), vref=vref, arm=arm, want_res=has_bank)
-        v = float(vmin[0].min()); vw.append(v); itot.append(float(Id.sum()))
+        xrows = []
+        while str_this and cmod.acc >= 1.0:
+            vx, _, _ = sim.run(Id[None, :].astype(np.float32), vref=vref, arm=arm, want_res=has_bank)
+            xrows.append(vx[0]); cmod.acc -= 1.0
+        v = float(min([vmin[0].min()] + [xr.min() for xr in xrows])); vw.append(v); itot.append(float(Id.sum()))
+        if cmod is not None: cmod.step_end(t, vw, pdn7.VNOM)
         vq.append(np.round(v / (q_mV * 1e-3)) * q_mV * 1e-3); t += 1
     tend = min(c.tend for c in cores)
+    t_extra = cmod.t_extra if cmod is not None else 0.0
     dr = (pdn7.VNOM - np.array(vw[warm:tend])) * 1e3; it = np.array(itot[warm:tend]); S = np.array(S_hist)
     rise = np.array([S[j:j + 3].max() - S[max(0, j - 3):j].min() for j in range(max(warm, 3), tend - 3)])
-    return dict(p999=float(np.percentile(dr, 99.9)), max=float(dr.max()), p99=float(np.percentile(dr, 99)),
-                dI999=float(np.percentile(np.abs(np.diff(it)), 99.9)), rise=[float(np.percentile(rise, q)) for q in (50, 90, 99, 99.9)],
-                sd=[c.slowdown() for c in cores], exec=[int(c.tnew.max()) for c in cores], nheld=nheld, cycles=t, tend=tend)
+    sd = [((int(c.tnew.max()) + t_extra) - int(c.tt.max())) / max(1, int(c.tt.max())) for c in cores]
+    out = dict(p999=float(np.percentile(dr, 99.9)), max=float(dr.max()), p99=float(np.percentile(dr, 99)),
+               dI999=float(np.percentile(np.abs(np.diff(it)), 99.9)), rise=[float(np.percentile(rise, q)) for q in (50, 90, 99, 99.9)],
+               sd=sd, exec=[int(c.tnew.max()) for c in cores], nheld=nheld, cycles=t, tend=tend)
+    if cmod is not None:
+        out.update(nstretch=cmod.nstretch, stretch_time=t_extra, n_restore_droop=cmod.n_restore_droop,
+                   restore_droop_max=cmod.restore_droop_max, mod_entries=cmod.mod_entries,
+                   stretch_hist={str(k): int(v) for k, v in cmod.stretch_hist.items()})
+    return out
 
 
 def run_single(eng, a, b, design, rob=80, warm=600):

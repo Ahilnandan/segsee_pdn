@@ -16,7 +16,8 @@ from __future__ import print_function
 import os, sys, json, numpy as np
 from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-B = '/home/ahilnandan/Documents/PMIC/segseee/OutOfOrder-Optimizations/traces/lacpo_cy100/bench/'
+B = os.environ.get('SEGSEE_TRACES', '/home/ahilnandan/Documents/PMIC/segseee/OutOfOrder-Optimizations/traces/lacpo_cy100/bench/')
+if not B.endswith('/'): B += '/'
 HERE = os.path.dirname(os.path.abspath(__file__)) + '/'
 K = 16; NR = 4
 FU_ALU, FU_BRU, FU_MEM, FU_MUL, FU_DIV, FU_CSR, FU_FPU, FU_FDV, FU_I2F, FU_F2I = 1, 2, 4, 8, 16, 32, 64, 128, 256, 512

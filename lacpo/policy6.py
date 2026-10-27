@@ -49,9 +49,134 @@ DEF = dict(th=8.0, kv=0.3, kb=4.0, maxd=4, H=8, th_arm=10.0, arm_len=3, arm_duty
            G_mV=None, W=TM.W, rep_mode='none', rep_pen=5, rep_Dmax=24, rep_th=4.0, rep_space=2, rep_bmin=0.3, rep_vm=5.0,
            seed=1, fb_err=0.0, cls_w=0.0, err_arm=0,
            cs_on=0, cs_thr=None, cs_lat=2, cs_len=4, cs_s=0.25, cs_noise=2.0, cs_pred=None,
+           cs_levels=None, cs_exit=None, cs_entry=None, cs_hyst=0.0, cs_rec=1, cs_honest=0, cs_max_time=None,
            edge_dI=None, edge_w=3, win_dI=None, win_k=0.2, debt_k=0.0, look_k=0.0, look_arm=0, tone_thr=None, tone_k=0.0,
            ready_min=0.0, ready_k=0.0, evs_gain=0.0, evs_target=0.0, rob=0, flush=0, avoid_vm=None, fc_mode='pred', fc_log=0, fc_kernel='default', fc_obs=0.0, fc7_design='banks', fc7_lag0=0, fc7_tag='train7', lock_k=None, lock_q=45.0)
 W0 = 2 * np.pi * 77e6 * pdn5.T_CYC; TONE = np.exp(-1j * W0 * np.arange(28))
+
+
+class ClockMod(object):
+    """B2 / B2v2 adaptive clock-modulation state machine (ADAPT-style multi-threshold + staggered restore ladder).
+    When configured with a single threshold and empty exit ladder, arithmetic and RNG calls are bit-identical to B2."""
+    def __init__(self, prm, VNOM=pdn5.VNOM):
+        self.VNOM = float(VNOM)
+        self.cs_lat = int(prm.get('cs_lat', 2))
+        self.cs_s = float(prm.get('cs_s', 0.25))
+        self.cs_len = int(prm.get('cs_len', 4))
+        self.cs_noise = float(prm.get('cs_noise', 2.0))
+        self.cs_hyst = float(prm.get('cs_hyst', 0.0))
+        self.cs_rec = max(1, int(prm.get('cs_rec', 1)))
+        self.cs_entry = float(prm['cs_entry']) if prm.get('cs_entry') is not None else None
+        self.max_time = int(prm['cs_max_time']) if prm.get('cs_max_time') is not None else None
+        if prm.get('cs_levels') is not None:
+            self.levels = sorted([(float(th), float(s), int(dw)) for th, s, dw in prm['cs_levels']], key=lambda x: x[0])
+        elif prm.get('cs_on') and prm.get('cs_thr') is not None:
+            self.levels = [(float(prm['cs_thr']), self.cs_s, self.cs_len)]
+        else:
+            self.levels = []
+        self.cs_exit = [(float(s), int(c)) for s, c in (prm.get('cs_exit') or []) if float(s) > 0 and int(c) > 0]
+        self.active = bool(self.levels)
+        self.legacy = (len(self.levels) == 1 and not self.cs_exit and self.cs_hyst == 0.0
+                       and self.cs_rec == 1 and self.cs_entry is None and self.max_time is None)
+        self.rng2 = np.random.RandomState(int(prm.get('seed', 1)) + 7919)
+        self.restore_thr_mV = 0.5 * float(prm['G_mV']) if prm.get('G_mV') is not None else 25.0
+        self.str_left = 0; self.cur_lvl = -1; self.exit_idx = -1; self.entry_left = 0
+        self.rec_cnt = 0; self.cont_mod = 0
+        self.acc = 0.0; self.t_extra = 0.0; self.nstretch = 0; self.mod_entries = 0
+        self.n_restore_droop = 0; self.restore_droop_max = 0.0
+        self.prev_s = 0.0; self.restore_win = 0; self.restore_v0 = self.VNOM
+        self.stretch_hist = collections.Counter(); self.s_trace = []
+
+    def step_begin(self, t, pend_str):
+        if self.max_time is not None and self.cont_mod >= self.max_time:
+            self.str_left = 0; self.cur_lvl = -1; self.exit_idx = -1; self.entry_left = 0; self.rec_cnt = 0
+        str_this = self.str_left > 0 or (t in pend_str)
+        if str_this:
+            pend_str.discard(t)
+            if self.str_left > 0:
+                if self.entry_left > 0:
+                    s_t = self.cs_entry; self.entry_left -= 1
+                elif self.cur_lvl >= 0:
+                    s_t = self.levels[self.cur_lvl][1]
+                elif self.exit_idx >= 0:
+                    s_t = self.cs_exit[self.exit_idx][0]
+                else:
+                    s_t = self.cs_s
+                self.str_left = max(0, self.str_left - 1)
+            else:
+                s_t = self.levels[0][1] if self.levels else self.cs_s
+            self.acc += s_t; self.t_extra += s_t; self.cont_mod += 1
+            self.stretch_hist[round(float(s_t), 6)] += 1
+        else:
+            s_t = 0.0; self.cont_mod = 0
+        if s_t < self.prev_s - 1e-9:
+            self.restore_win = 8
+        self.prev_s = s_t; self.s_trace.append(s_t)
+        return str_this, s_t
+
+    def step_end(self, t, vworst, vref):
+        vw = vworst[t]
+        if self.prev_s > 0 and self.restore_win == 0:
+            self.restore_v0 = vw
+        if self.restore_win > 0:
+            dip_mV = (vref - vw) * 1e3
+            step_dip_mV = (self.restore_v0 - vw) * 1e3
+            if step_dip_mV > self.restore_droop_max:
+                self.restore_droop_max = float(step_dip_mV)
+            if dip_mV > self.restore_thr_mV:
+                self.n_restore_droop += 1; self.restore_win = 0
+            else:
+                self.restore_win -= 1
+        if not self.active or t < self.cs_lat:
+            return
+        if self.legacy:
+            thr = self.VNOM - (self.levels[0][0] + self.cs_noise * self.rng2.randn()) * 1e-3
+            if vworst[t - self.cs_lat] < thr:
+                if self.str_left == 0: self.nstretch += 1; self.mod_entries += 1
+                self.str_left = max(self.str_left, self.levels[0][2]); self.cur_lvl = 0
+            elif self.str_left == 0:
+                self.cur_lvl = -1
+            return
+        nz = self.cs_noise * self.rng2.randn()
+        v_det = vworst[t - self.cs_lat]
+        trig_lvl = -1
+        for k in range(len(self.levels) - 1, -1, -1):
+            if v_det < self.VNOM - (self.levels[k][0] + nz) * 1e-3:
+                trig_lvl = k; break
+        if trig_lvl >= 0:
+            self.rec_cnt = 0
+            if self.cur_lvl < 0 and self.exit_idx < 0 and self.str_left == 0:
+                self.nstretch += 1; self.mod_entries += 1
+                if self.cs_entry is not None: self.entry_left = 1
+                self.cur_lvl = trig_lvl; self.str_left = self.levels[trig_lvl][2]
+            elif self.exit_idx >= 0:
+                self.nstretch += 1
+                self.exit_idx = -1; self.cur_lvl = trig_lvl; self.str_left = self.levels[trig_lvl][2]
+            elif trig_lvl > self.cur_lvl:
+                self.cur_lvl = trig_lvl; self.str_left = max(self.str_left, self.levels[trig_lvl][2])
+            else:
+                if self.str_left == 0: self.nstretch += 1
+                self.str_left = max(self.str_left, self.levels[self.cur_lvl][2])
+        else:
+            if self.cur_lvl >= 0 and self.str_left == 0:
+                thr_rec = self.VNOM - (self.levels[self.cur_lvl][0] - self.cs_hyst + nz) * 1e-3
+                if v_det >= thr_rec: self.rec_cnt += 1
+                else: self.rec_cnt = 0
+                if self.rec_cnt >= self.cs_rec:
+                    s_cur = self.levels[self.cur_lvl][1]
+                    e0 = next((idx for idx, (sx, _) in enumerate(self.cs_exit) if sx < s_cur), -1)
+                    self.cur_lvl = -1; self.rec_cnt = 0
+                    if e0 >= 0:
+                        self.exit_idx = e0; self.str_left = self.cs_exit[e0][1]
+                    else:
+                        self.exit_idx = -1; self.str_left = 0
+                else:
+                    self.str_left = 1
+            elif self.exit_idx >= 0 and self.str_left == 0:
+                if self.exit_idx + 1 < len(self.cs_exit):
+                    self.exit_idx += 1; self.str_left = self.cs_exit[self.exit_idx][1]
+                else:
+                    self.exit_idx = -1; self.str_left = 0
 
 class Engine(C6.CL):
     def __init__(self, w):
@@ -153,7 +278,7 @@ class Engine(C6.CL):
             for x in aff:
                 if x != i and pend[x] == 0: wake[t + (int(prm['rep_pen']) if prm['flush'] else 1)].append((x, ver[x]))
             return len(S)
-        str_left = 0; acc = 0.0; t_extra = 0.0; vref_rows = []; rng2 = np.random.RandomState(int(prm['seed']) + 7919)
+        cmod = ClockMod(prm, VNOM=pdn5.VNOM); vref_rows = []
         ROBN = int(prm['rob']); order = np.argsort(age, kind='stable'); rank = np.empty(m, np.int64); rank[order] = np.arange(m)
         commit = 0; rob_wait = []; nrobstall = 0; freeze = 0; navoid = 0; lock = np.zeros(3, np.int64) - 1; nlock = 0
         MEAS = prm['fc_mode'] == 'meas'; Imeas = np.zeros(L + K); mu_m = 0.0; flog = []
@@ -172,7 +297,11 @@ class Engine(C6.CL):
                     if tnew[i] < 0: continue
                     t0 = tnew[i] + 2; t1 = t - 1; ws = vworst[t0:t1 + 1]
                     if not len(ws): continue
-                    u = uname[i]; wsu = [w_ for k2, w_ in enumerate(ws) if not stretched[t0 + k2]]
+                    u = uname[i]
+                    if prm['cs_honest']:
+                        wsu = [w_ + cmod.s_trace[t0 + k2] / 0.096 for k2, w_ in enumerate(ws)]
+                    else:
+                        wsu = [w_ for k2, w_ in enumerate(ws) if not stretched[t0 + k2]]
                     if safe[i] or not wsu: continue
                     vmn = min(wsu)
                     if vmn < VF[u] and rng.rand() < TM.P[u]:
@@ -317,15 +446,14 @@ class Engine(C6.CL):
             arm = np.full(T, 1 if arm_left > 0 else 0, np.uint8); narm += int(arm_left > 0); arm_ewma += (float(arm_left > 0) - arm_ewma) / 256.0
             arm_left = max(0, arm_left - 1)
             if t >= warm: E_ref += I_t.sum() * 1e-3 * pdn5.VNOM * pdn5.T_CYC
-            str_this = str_left > 0 or t in pend_str
+            str_this, s_t = cmod.step_begin(t, pend_str)
             if str_this:                                          # stretched period: same charge over (1 + s) T
-                pend_str.discard(t); str_left = max(0, str_left - 1)
-                I_t = pdn5.LEAK_T + np.maximum(I_t - pdn5.LEAK_T, 0) / (1 + prm['cs_s']); acc += prm['cs_s']; t_extra += prm['cs_s']
+                I_t = pdn5.LEAK_T + np.maximum(I_t - pdn5.LEAK_T, 0) / (1 + s_t)
             vmin, vavg, vres = sim.run(I_t[None, :].astype(np.float32), vref=np.array([vref]), arm=arm[None, :], want_res=has_bank, want_state=True)
             xrows = []
-            while str_this and acc >= 1.0:
+            while str_this and cmod.acc >= 1.0:
                 vx, _, _ = sim.run(I_t[None, :].astype(np.float32), vref=np.array([vref]), arm=arm[None, :], want_state=True)
-                xrows.append(vx[0]); acc -= 1.0
+                xrows.append(vx[0]); cmod.acc -= 1.0
             vq.append(np.round(vmin[0] / (q_mV * 1e-3)) * q_mV * 1e-3)
             if has_bank:
                 vr = vres[0][[t_ for t_ in design['bank']]]; bq.append(float(np.clip((vr.mean() - 1.3) / (2.15 - 1.3), 0, 1)))
@@ -335,13 +463,9 @@ class Engine(C6.CL):
             vw = float(min([vmin[0].min()] + [xr.min() for xr in xrows])); vworst.append(vw)
             Ib_last = 1e3 * float(sim.state[0][2]); Imeas[t] = float(I_t.sum()) - Ib_last; mu_m += (Imeas[t] - mu_m) / 256.0
             stretched.append(str_this)
-            # B2: detector (latency, noise) -> stretch the following cs_len periods
-            if prm['cs_on'] and t >= prm['cs_lat']:
-                thr = pdn5.VNOM - (prm['cs_thr'] + prm['cs_noise'] * rng2.randn()) * 1e-3
-                if vworst[t - int(prm['cs_lat'])] < thr:
-                    if str_left == 0: nstretch += 1
-                    str_left = max(str_left, int(prm['cs_len']))
+            cmod.step_end(t, vworst, vref)
             t += 1
+        nstretch = cmod.nstretch; t_extra = cmod.t_extra
         V = np.array(vmin_all); VR = np.array(vref_rows, np.float32)[:, None]; d = (VR[warm:] - V[warm:]) * 1e3; worst = d.max(1)   # droop vs the rail's own target
         st = sim.stats; E = st[0]
         exec_new = (int(tnew.max()) if m else 0) + t_extra; exec_old = int(tt.max()) if m else 1
@@ -350,8 +474,45 @@ class Engine(C6.CL):
                    loss=float((st[2] + st[3] + st[4] + st[5]) / E), E=E, E_cmos=float(E * V[warm:].mean() / pdn5.VNOM),
                    energy_over=float((st[2] + st[3] + st[4] + st[5] + E_dum) / max(E - E_dum, 1e-30)), E_off=float(st[1]), vmean=float(V[warm:].mean()),
                    nhold=nhold, nreo=nreo, ndum=ndum, arm_frac=narm / max(1, t),
-                   nerr=nerr, nundet=nundet, nsquash=nsquash, nforced=nforced, nstretch=nstretch, stretch_time=t_extra, evs_mean=evs_sum / max(1, t), nrobstall=nrobstall, navoid=navoid, nlock=nlock, nuops=m,
+                   nerr=nerr, nundet=nundet, nsquash=nsquash, nforced=nforced, nstretch=nstretch, stretch_time=t_extra,
+                   n_restore_droop=cmod.n_restore_droop, restore_droop_max=cmod.restore_droop_max, mod_entries=cmod.mod_entries,
+                   stretch_hist={str(k): int(v) for k, v in cmod.stretch_hist.items()},
+                   evs_mean=evs_sum / max(1, t), nrobstall=nrobstall, navoid=navoid, nlock=nlock, nuops=m,
                    defer_mean=float(np.mean(defer)) if defer else 0.0, defer_max=int(max(defer)) if defer else 0)
         if prm['fc_log']: res['flog'] = np.array(flog); res['vavg_t'] = np.array(vworst)
-        if record: res['vworst_pdn'] = V.min(1); res['vworst'] = np.array(vworst); res['stretched'] = np.array(stretched); res['tnew'] = tnew
+        if record: res['vworst_pdn'] = V.min(1); res['vworst'] = np.array(vworst); res['stretched'] = np.array(stretched); res['s_trace'] = np.array(cmod.s_trace); res['tnew'] = tnew
         return res
+
+
+def sim_clock_openloop(design, I_mA, prm=None, warm=600, record=False):
+    """Step pdn6.Sim closed-loop with ClockMod (B2 / B2v2) on a pre-computed per-tile current trace I_mA (n, T)."""
+    prm = dict(DEF, **(prm or {}))
+    I = np.asarray(I_mA, np.float32); n = len(I)
+    sim = pdn5.Sim(design, Im_A=I[:min(3000, n)].mean(0) * 1e-3)
+    has_bank = bool(design.get('bank')); arm = np.zeros((1, T), np.uint8); vref = np.array([pdn5.VNOM])
+    cmod = ClockMod(prm, VNOM=pdn5.VNOM); pend_str = set()
+    vmin_all = []; vref_rows = []; vworst = []; stretched = []
+    for t in range(n):
+        I_t = I[t].copy()
+        str_this, s_t = cmod.step_begin(t, pend_str)
+        if str_this:
+            I_t = pdn5.LEAK_T + np.maximum(I_t - pdn5.LEAK_T, 0) / (1 + s_t)
+        vmin, _, _ = sim.run(I_t[None, :].astype(np.float32), vref=vref, arm=arm, want_res=has_bank, want_state=True)
+        xrows = []
+        while str_this and cmod.acc >= 1.0:
+            vx, _, _ = sim.run(I_t[None, :].astype(np.float32), vref=vref, arm=arm, want_state=True)
+            xrows.append(vx[0]); cmod.acc -= 1.0
+        vmin_all.append(vmin[0]); vref_rows.append(pdn5.VNOM)
+        for xr in xrows: vmin_all.append(xr); vref_rows.append(pdn5.VNOM)
+        vw = float(min([vmin[0].min()] + [xr.min() for xr in xrows])); vworst.append(vw)
+        stretched.append(str_this)
+        cmod.step_end(t, vworst, pdn5.VNOM)
+    V = np.array(vmin_all); VR = np.array(vref_rows, np.float32)[:, None]; d = (VR[warm:] - V[warm:]) * 1e3; worst = d.max(1)
+    st = sim.stats; E = max(st[0], 1e-30)
+    res = dict(p999=float(np.percentile(worst, 99.9)), max=float(worst.max()), p99=float(np.percentile(worst, 99)),
+               slowdown=cmod.t_extra / max(1, n - 1), loss=float((st[2] + st[3] + st[4] + st[5]) / E),
+               nstretch=cmod.nstretch, stretch_time=cmod.t_extra,
+               n_restore_droop=cmod.n_restore_droop, restore_droop_max=cmod.restore_droop_max, mod_entries=cmod.mod_entries,
+               stretch_hist={str(k): int(v) for k, v in cmod.stretch_hist.items()})
+    if record: res['vworst_pdn'] = V.min(1); res['vworst'] = np.array(vworst); res['stretched'] = np.array(stretched); res['s_trace'] = np.array(cmod.s_trace)
+    return res

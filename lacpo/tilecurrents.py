@@ -1,9 +1,10 @@
 """Phase 0.7: per-tile current traces (mA, per 3 ns cycle) from per-block LACPo currents + cache model, mapped through
 floorplan.json (block current spread over its tiles by area). Also per-tile leakage (mA) for the PDN intra-cycle shape.
 Baseline schedule only; the closed-loop simulator re-maps issue-coupled current per uop (Phase 1)."""
-import json, sys, numpy as np, pandas as pd
-B = '/home/ahilnandan/Documents/PMIC/segseee/OutOfOrder-Optimizations/traces/lacpo_cy100/bench/'
-HERE = '/home/ahilnandan/Documents/PMIC/pdn_work/lacpo/'
+import json, os, sys, numpy as np, pandas as pd
+B = os.environ.get('SEGSEE_TRACES', '/home/ahilnandan/Documents/PMIC/segseee/OutOfOrder-Optimizations/traces/lacpo_cy100/bench/')
+if not B.endswith('/'): B += '/'
+HERE = os.path.dirname(os.path.abspath(__file__)) + '/'
 FP = json.load(open(HERE + 'floorplan.json')); N = FP['n']; NT = N * N
 COLMAP = {'frontend__bpdpipeline__bpd__counter_table_1': 'bpd', 'frontend__bpdpipeline__btb_handpicked_signals_1': 'btb',
           'frontend__fetch_controller_1': 'fetch', 'core__decode_units_0_1': 'decode', 'core__decode_units_1_1': 'decode',

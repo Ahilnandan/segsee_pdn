@@ -7,8 +7,9 @@ its fast part). Background B_r[n] = I_r[n] - (h * N)[n] is what replay keeps (ti
 from __future__ import print_function
 import json, sys, os, numpy as np, pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-B = '/home/ahilnandan/Documents/PMIC/segseee/OutOfOrder-Optimizations/traces/lacpo_cy100/bench/'
-HERE = '/home/ahilnandan/Documents/PMIC/pdn_work/lacpo/'
+B = os.environ.get('SEGSEE_TRACES', '/home/ahilnandan/Documents/PMIC/segseee/OutOfOrder-Optimizations/traces/lacpo_cy100/bench/')
+if not B.endswith('/'): B += '/'
+HERE = os.path.dirname(os.path.abspath(__file__)) + '/'
 WL = ['qsort', 'rsort', 'mm', 'dhrystone', 'spmv', 'multiply', 'memcpy', 'median', 'vvadd', 'towers']
 FIT = ['qsort', 'mm', 'spmv', 'memcpy', 'towers']; TEST = [w for w in WL if w not in FIT]
 REG = ['R0_frontend_I$', 'R1_int_core', 'R2_lsu_D$', 'R3_fp']
