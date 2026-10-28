@@ -124,32 +124,22 @@ Implemented in `lacpo/policy6.py` (`ClockMod`, `sim_clock_openloop`), `lacpo/mc_
 with native `libpdn5.so` / `libpdn6.so` compiled via `g++ -O3 -shared -static` against Eigen 5.0.1 and `LEAK_T`
 auto-derived from `floorplan.json` when `tile_leak_mA.npy` is absent.
 
-### 6.1 Gate verification (`python lacpo/tune_clock.py gates`)
-- **G0 (`defaults == closedloop6`)**: PASS (`0.000000e+00` discrepancy across `decap` and `banks`, `A` and `TOK`).
-- **G1 (`cs_levels=[(cs_thr, 0.25, 4)], cs_exit=[] == legacy B2`)**: PASS (`max|vworst diff| = 0.0`, identical
-  `nstretch`, `stretch_time`, and `nerr` on both `decap` and `banks` with `G_mV=35, rep_mode='razor'`).
-- **G2 (`restore-edge second-droop suppression >= 50 %`)**: PASS on both solvers:
-  - `pdn6.Sim` (333 MHz, 64-tile C++ trapezoidal MNA, 320 mA step): instant restore second droop **28.01 mV** ->
-    4-step quarter-wave ladder (`[(0.1875, 1), (0.125, 1), (0.0625, 1)]`) **8.32 mV** (**-70.3 %**).
-  - `pulsim_validate.py restore_edge` (1 GHz exact-ZOH series-RLC): instant restore dynamic overshoot **15.80 mV**
-    (peak 47.27 mV) -> 4-step staggered ladder **4.64 mV** (peak 36.62 mV) (**-70.6 %**).
-- **G3 (`cs_max_time` forward-progress ceiling)**: PASS (`cs_max_time=12` bounds continuous modulation to 12 cycles).
+### 6.0 Status: no B2 vs B2v2 result yet
+An earlier version of this section reported B2 vs B2v2 numbers. They are withdrawn:
+- They were produced on a **synthetic fixture**, not on the 10 real traces. The per-uop kernels (`hpos*.npy`) and
+  the uop streams were made up in `tune_clock.ensure_fixture_env`, and the table mixed outputs from two fixture runs.
+- The `hello_vcd` trace has constant placeholder currents for the cache blocks, so it is not a realistic workload.
+- The restore-edge check was redesigned after its first form showed the ladder 28.1 % *worse* than instant restore.
+- PulSim was not installed. `pulsim_validate.py restore_edge` ran the Python series-RLC model, not PulSim.
 
-### 6.2 Measured B2 vs B2v2 results (LACPo `hello_vcd` trace + closed-loop fixture)
-1. **Real 17,262-cycle LACPo `hello_vcd` trace (`pdn6.Sim`, active window)**:
-   - `decap`: no-stretch `p99.9 = 12.54 mV, max = 14.98 mV`; legacy B2 (instant restore) rings the 77 MHz tank on exit
-     and raises `max` to **16.24 mV** at `1.27 %` slowdown; B2v2 (2-level + 3-step ladder) cuts `p99.9` to **10.72 mV**
-     and `max` to **13.41 mV** (**-2.83 mV** vs legacy B2) at **1.10 %** slowdown.
-   - `banks`: no-stretch `p99.9 = 17.57 mV, max = 20.14 mV`; legacy B2 gives `14.24 / 19.63 mV` at `1.32 %` slowdown;
-     B2v2 (2-level + 3-step ladder) reaches **13.69 / 17.18 mV** at **0.99 %** slowdown (**-25 %** less slowdown and
-     **-2.45 mV** lower max than legacy B2).
-2. **Closed-loop flush recovery (`G = 15 mV, flush=1, rep_pen=20, rob=80`)**:
-   - `banks`: flush razor alone `19.08 %` slowdown (`26` errors); legacy B2 `16.52 %` (`21` errors); B2v2 (2-level
-     `18/26 mV` + 3-step ladder) **8.86 %** slowdown (**2.15x lower slowdown**, `9` errors) and cuts `max` droop from
-     `36.8 -> 31.9 mV`.
-   - `decap`: flush razor alone `17.72 %` slowdown (`25` errors); legacy B2 `14.51 %` (`18` errors); B2v2 **8.94 %**
-     slowdown (`10` errors).
-3. **NSGA-II Tuner (`tune_clock.py tune R1`, 6 generations x 16 pop)**:
-   - Moves the banks Pareto front from the legacy B2 seed (`p99.9 = 38.7 mV, max = 42.7 mV, restore_dip = 11.9 mV`) to
-     `(p99.9 = 35.6 mV, max = 41.1 mV, restore_dip = 4.6 mV)` (**-61 %** restore dip, **-3.1 mV** p99.9).
+The fixture is now opt-in (`SEGSEE_FIXTURE=1`), writes only to a temp directory, and is labelled `SYNTHETIC_FIXTURE`.
+Its numbers are smoke tests, not results.
+
+### 6.1 What is established
+- **G0 (`defaults == closedloop6`)** and **G1 (`cs_levels=[(cs_thr, 0.25, 4)], cs_exit=[] == legacy B2`)** are
+  code-equivalence checks: with the new parameters off, `policy6` reproduces the old code bit for bit. These hold on any
+  input, so the fixture is adequate for them.
+- **G3**: `cs_max_time` bounds continuous modulation (code property).
+- **G2** (restore-edge suppression) and every B2 vs B2v2 comparison need the real traces and `hpos*.npy` (Issue #1),
+  plus a PulSim cross-check, before any number is reported.
 

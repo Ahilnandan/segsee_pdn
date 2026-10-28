@@ -2,8 +2,12 @@
 modulation (multi-threshold entry + staggered frequency restore ladder) on policy6 / pdn6 / mc_engine.
 
 Usage:
-  python lacpo/tune_clock.py gates                # run G0, G1, G2, G3 + PulSim restore-edge check + real LACPo trace check
+  python lacpo/tune_clock.py gates                # run G0, G1, G2, G3 + restore-edge check + hello_vcd trace check
   python lacpo/tune_clock.py tune [R1|R2|R3|MC]   # run NSGA-II / surrogate tuner for the chosen regime
+
+Needs the real traces (SEGSEE_TRACES) and lacpo/hpos*.npy. Without them, SEGSEE_FIXTURE=1 runs on a synthetic
+fixture for smoke tests only. LACPO_HELLO_CSV optionally points at DecouplingCap traces/hello_vcd/composed_P_t.csv,
+whose cache-block currents are constant placeholders.
 """
 from __future__ import print_function
 import os, sys, json, copy, time, tempfile, numpy as np
@@ -53,39 +57,39 @@ def decode_clock(g, G_mV=None, rep_mode='none', flush=0, rep_pen=5, honest=0):
     return prm
 
 
+HELLO_CSV = os.environ.get('LACPO_HELLO_CSV', '')
+
+
 def ensure_fixture_env():
-    """If SEGSEE_TRACES is missing on this machine, build a deterministic trace fixture (using real LACPo
-    composed_P_t.csv from DecouplingCap if present, plus realistic MediumBoom uop dependencies) so G0-G3,
-    policy6.Engine, closedloop6.CL, and mc_engine.run_mc can execute end-to-end."""
+    """Use the real traces and kernels when present. Otherwise, only if SEGSEE_FIXTURE=1, build a SYNTHETIC
+    fixture (made-up per-uop kernels and uop streams) in a temp directory so the code paths can be smoke-tested.
+    Fixture numbers are not results. Fixture kernels are never written into lacpo/."""
     import replay3, tilecurrents as TC, workload5 as W5
+    import closedloop6 as C6, policy6 as P6
     if os.path.exists(replay3.B + 'qsort_attr5.npz') and os.path.exists(HERE + 'hpos.npy') and os.path.exists(HERE + 'hpos_blocks.npy'):
         return replay3.B, 'full_traces'
-    tmp = os.path.join(tempfile.gettempdir(), 'segsee_fixture_traces_v2') + os.sep
+    if os.environ.get('SEGSEE_FIXTURE') != '1':
+        raise RuntimeError('Real traces/kernels not found (SEGSEE_TRACES=%s, %shpos*.npy). Set SEGSEE_FIXTURE=1 '
+                           'to smoke-test on a synthetic fixture; its numbers are not results.' % (replay3.B, HERE))
+    tmp = os.path.join(tempfile.gettempdir(), 'segsee_fixture_traces_v3') + os.sep
     os.makedirs(tmp, exist_ok=True)
-    rng = np.random.RandomState(42)
     nb = len(W5.BLOCKS); nc = 10; K = replay3.K
-    # Build deterministic hpos.npy (4, 10, 16) and hpos_blocks.npy (9, 10, 16) if not on disk
-    if not os.path.exists(HERE + 'hpos_blocks.npy') or np.load(HERE + 'hpos_blocks.npy').sum() < 50.0:
-        hb = np.zeros((nb, nc, K), np.float64)
-        base_q = [18.0, 14.0, 38.0, 34.0, 42.0, 22.0, 14.0, 48.0, 30.0, 26.0]
-        sh_k = np.array([0.08, 0.18, 0.24, 0.20, 0.12, 0.07, 0.04, 0.03, 0.02, 0.01, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0])
-        for c in range(nc):
-            for b in range(nb):
-                hb[b, c, :] = base_q[c] * (0.20 if b in (0, 2, 3, 6, 8) else 0.05) * sh_k
-        np.save(HERE + 'hpos_blocks.npy', hb)
-    if not os.path.exists(HERE + 'hpos.npy') or np.load(HERE + 'hpos.npy').sum() < 50.0:
-        hb = np.load(HERE + 'hpos_blocks.npy')
-        h4 = np.zeros((4, nc, K), np.float64)
-        for c in range(nc):
-            h4[1, c, :] = 0.6 * hb[:, c, :].sum(0)
-            h4[2, c, :] = 0.3 * hb[:, c, :].sum(0)
-            h4[0, c, :] = 0.1 * hb[:, c, :].sum(0)
-        np.save(HERE + 'hpos.npy', h4)
-    hb = np.load(HERE + 'hpos_blocks.npy')
-    # Check if real LACPo hello_vcd composed_P_t.csv exists on this machine
-    lacpo_csv = r'C:\Users\unnat\Documents\DecouplingCap\traces\hello_vcd\composed_P_t.csv'
+    hb = np.zeros((nb, nc, K), np.float64)
+    base_q = [18.0, 14.0, 38.0, 34.0, 42.0, 22.0, 14.0, 48.0, 30.0, 26.0]
+    sh_k = np.array([0.08, 0.18, 0.24, 0.20, 0.12, 0.07, 0.04, 0.03, 0.02, 0.01, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0])
+    for c in range(nc):
+        for b in range(nb):
+            hb[b, c, :] = base_q[c] * (0.20 if b in (0, 2, 3, 6, 8) else 0.05) * sh_k
+    h4 = np.zeros((4, nc, K), np.float64)
+    for c in range(nc):
+        h4[1, c, :] = 0.6 * hb[:, c, :].sum(0)
+        h4[2, c, :] = 0.3 * hb[:, c, :].sum(0)
+        h4[0, c, :] = 0.1 * hb[:, c, :].sum(0)
+    np.save(tmp + 'hpos_blocks.npy', hb)
+    np.save(tmp + 'hpos.npy', h4)
+    lacpo_csv = HELLO_CSV
     real_bg = None
-    if os.path.exists(lacpo_csv):
+    if lacpo_csv and os.path.exists(lacpo_csv):
         import pandas as pd
         df = pd.read_csv(lacpo_csv)
         n_csv = len(df)
@@ -155,10 +159,9 @@ def ensure_fixture_env():
         dc_mshr = np.zeros(n, np.int64); ic_miss = np.zeros(n, np.int64)
         for b0 in range(300, n - 100, 250): dc_mshr[b0 - 6] = 1
         np.savez_compressed(tmp + w + '_cache.npz', dc_mshr=dc_mshr, ic_miss=ic_miss)
-    replay3.B = tmp
-    import closedloop6 as C6, policy6 as P6
-    C6.B = tmp; P6.B = tmp
-    return tmp, ('hello_vcd_lacpo_fixture' if real_bg is not None else 'synthetic_fixture')
+    replay3.B = tmp; C6.B = tmp; P6.B = tmp
+    replay3.HERE = tmp; C6.HERE = tmp
+    return tmp, 'SYNTHETIC_FIXTURE'
 
 
 def run_gates():
@@ -221,7 +224,7 @@ def run_gates():
 def benchmark_b2_vs_b2v2():
     """Compare legacy B2 vs ADAPT-tuned B2v2 across:
       (1) Single-core closed-loop Engine (R1 no-replay, R2 selective replay, R3 flush recovery)
-      (2) Real 17,262-cycle LACPo hello_vcd trace on pdn6.Sim (decap and banks)
+      (2) LACPo hello_vcd trace on pdn6.Sim (decap and banks; cache blocks are constant placeholders)
       (3) Multi-core 2x2 shared-die pdn7.Sim lockstep scenario (chip-wide B2v2 clock vs cross-core hold coordinator)."""
     ensure_fixture_env()
     import policy6 as P6, eval6, mc_engine as MC, tilecurrents as TC
@@ -251,9 +254,9 @@ def benchmark_b2_vs_b2v2():
             print('%-6s | %-56s | p999 %5.1f | max %5.1f | slow %5.2f%% | err %3d | restore_dip %4.1f mV (n=%d)'
                   % (dn, tag, r['p999'], r['max'], 100.0 * r['slowdown'], r['nerr'], r['restore_droop_max'], r['n_restore_droop']))
 
-    # 2. Real 17,262-cycle LACPo hello_vcd trace (if present on disk)
-    lacpo_csv = r'C:\Users\unnat\Documents\DecouplingCap\traces\hello_vcd\composed_P_t.csv'
-    if os.path.exists(lacpo_csv):
+    # 2. LACPo hello_vcd trace (if LACPO_HELLO_CSV is set)
+    lacpo_csv = HELLO_CSV
+    if lacpo_csv and os.path.exists(lacpo_csv):
         import pandas as pd
         df = pd.read_csv(lacpo_csv).iloc[-6000:].reset_index(drop=True); n_csv = len(df)
         blk = {}
@@ -264,7 +267,7 @@ def benchmark_b2_vs_b2v2():
         blk['ptw'] = np.full(n_csv, 7.24); blk['tile_misc'] = np.full(n_csv, 1.5)
         I_hello = np.zeros((n_csv, 64), np.float32)
         for b, v in blk.items(): I_hello += np.outer(v / 1.1, TC.W[b]).astype(np.float32)
-        print('\n=== 2. Real LACPo hello_vcd Trace on pdn6.Sim (%d cycles) ===' % n_csv)
+        print('\n=== 2. LACPo hello_vcd Trace on pdn6.Sim (%d cycles, placeholder cache currents) ===' % n_csv)
         for dn in ('decap', 'banks'):
             r0 = P6.sim_clock_openloop(D[dn], I_hello, dict(cs_on=0), warm=600)
             thr_b = round(0.55 * r0['p999'], 2)
