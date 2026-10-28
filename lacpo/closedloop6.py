@@ -14,8 +14,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import replay3, pdn6 as pdn5, workload5 as W5
 B = replay3.B; HERE = replay3.HERE; K = replay3.K; T = pdn5.T
 
+_IMP_DEFAULT = {}
 def pdn_impulse(design=None, n=48):
     """mV of mean die voltage per mA of total load current, 1-cycle pulse (from the tiled network, frequency solve)."""
+    if design is None and n in _IMP_DEFAULT: return _IMP_DEFAULT[n]
     net = pdn5.build(design or dict(A_x=0.3 * pdn5.CELL_SHARE)); f = np.fft.rfftfreq(1024, pdn5.T_CYC)
     import scipy.sparse.linalg as spl
     u = np.zeros(net['nu']); u[1:1 + T] = pdn5.CELL_SHARE; b = net['B'].dot(u); Z = np.zeros(len(f), complex)
@@ -24,6 +26,7 @@ def pdn_impulse(design=None, n=48):
         x = spl.spsolve(((2j * np.pi * fk) * net['E'] - net['A']).tocsc(), b); Z[k] = x[net['didx']].dot(pdn5.CELL_SHARE)
     # 1 mA, one-cycle rectangular pulse -> voltage (cycle-averaged)
     P = np.fft.rfft(np.r_[1e-3, np.zeros(1023)]); h = np.fft.irfft(P * Z, 1024) * 1e3
+    if design is None: _IMP_DEFAULT[n] = h[:n]
     return h[:n]
 
 class CL(object):

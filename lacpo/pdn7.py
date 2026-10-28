@@ -27,7 +27,15 @@ def tiles_of(k):
     cr, cc = divmod(k, NC); return np.array([(cr * N1 + r) * N + cc * N1 + c for r in range(N1) for c in range(N1)])
 CORE_OF = np.zeros(T, int)
 for _k in range(NCORE): CORE_OF[tiles_of(_k)] = _k
-LEAK1 = np.load(HERE + 'tile_leak_mA.npy'); LEAK_T = np.zeros(T)
+def _leak1(fp):
+    nt = N1 * N1; W = {}
+    for b, d in fp['blocks'].items():
+        w = np.zeros(nt)
+        for k, f in d['tiles'].items():
+            c, r = map(int, k.split('_')); w[r * N1 + c] = f
+        W[b] = w
+    return sum(fp['blocks'][b]['leak_mW'] * W[b] for b in W) / 1.1
+LEAK1 = np.load(HERE + 'tile_leak_mA.npy') if os.path.exists(HERE + 'tile_leak_mA.npy') else _leak1(FP); LEAK_T = np.zeros(T)
 for _k in range(NCORE): LEAK_T[tiles_of(_k)] = LEAK1
 CELL_SHARE = LEAK_T / LEAK_T.sum()
 def place(arrs):

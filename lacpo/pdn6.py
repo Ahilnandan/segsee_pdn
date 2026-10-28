@@ -16,7 +16,15 @@ FP = json.load(open(HERE + 'floorplan.json')); N = FP['n']; T = N * N
 VNOM = 1.1; T_CYC = 3e-9; SUB = 12; DT = T_CYC / SUB
 DECAP_DENS = 12e-9; CP_DENS = 3e-9; DIE_MM2 = FP['die_mm2']
 _sh = np.array([0.6, 1.6, 1.9, 1.6, 1.3, 1.1, 0.9, 0.8, 0.7, 0.7, 0.7, 0.7]); SHAPE = _sh / _sh.mean()
-LEAK_T = np.load(HERE + 'tile_leak_mA.npy')
+def _leak_t(fp):
+    W = {}
+    for b, d in fp['blocks'].items():
+        w = np.zeros(T)
+        for k, f in d['tiles'].items():
+            c, r = map(int, k.split('_')); w[r * N + c] = f
+        W[b] = w
+    return sum(fp['blocks'][b]['leak_mW'] * W[b] for b in W) / 1.1
+LEAK_T = np.load(HERE + 'tile_leak_mA.npy') if os.path.exists(HERE + 'tile_leak_mA.npy') else _leak_t(FP)
 CELL_SHARE = LEAK_T / LEAK_T.sum()
 
 class Tile(ctypes.Structure):

@@ -30,7 +30,10 @@ giving the inductor the matching i0 initial condition reproduces it exactly
 (zero startup transient in either model) -- confirmed below.
 """
 import sys, numpy as np
-import pulsim as p
+try:
+    import pulsim as p
+except ImportError:
+    p = None
 from candparse import parse
 from replay2 import build, unwrap_age, calibrate, run, droop
 
@@ -71,7 +74,41 @@ def pulsim_droop_mV(I_mA, cyc_s=1e-9, sub=1):
     vdie = states[:, vdie_idx]
     return -vdie[::sub][:n] * 1e3  # mV, one sample per real cycle
 
+
+def restore_edge_check(sub=8):
+    """§2.4 restore-edge check: settle in a 300 mA dynamic burst under clock stretch (s=0.25), then restore to
+    nominal clock (s=0) (a) instantly in 1 step vs (b) in a 4-step staggered ladder spanning the ~10 ns LC period."""
+    i_base, i_burst = 100.0, 400.0
+    i_str = i_base + (i_burst - i_base) / 1.25
+    out = {}
+    for name, ladder in (('instant', []), ('ladder_4x1_16', [0.1875, 0.1875, 0.125, 0.125, 0.0625, 0.0625])):
+        seq = [i_str] * 60   # settled in stretched mode (s=0.25) so entry transient is 0
+        t_rest = len(seq)
+        for s in ladder:
+            seq.append(i_base + (i_burst - i_base) / (1.0 + s))
+        seq += [i_burst] * 40
+        In = np.array(seq, float)
+        dc = droop(In)
+        dc_ss = float(dc[-1])   # steady-state DC IR drop at i_burst
+        over_c = float(dc[t_rest:].max() - dc_ss)
+        row = dict(closed_restore_dip_mV=over_c, closed_max_mV=float(dc[t_rest:].max()))
+        if p is not None:
+            dp = pulsim_droop_mV(In, sub=sub)
+            over_p = float(dp[t_rest:].max() - float(dp[-1]))
+            err_pct = 100.0 * abs(over_p - over_c) / max(abs(over_c), 1e-6)
+            row.update(pulsim_restore_dip_mV=over_p, pulsim_max_mV=float(dp[t_rest:].max()), peak_err_pct=err_pct)
+        out[name] = row
+        print(f'restore_edge [{name:14s}]: closed restore overshoot={over_c:5.2f} mV (peak={dc[t_rest:].max():5.2f} mV)'
+              + (f', pulsim={row["pulsim_restore_dip_mV"]:5.2f} mV (err {row["peak_err_pct"]:.1f}%)' if p is not None else ' (pulsim not installed in current env)'))
+    red = 100.0 * (1.0 - out['ladder_4x1_16']['closed_restore_dip_mV'] / max(out['instant']['closed_restore_dip_mV'], 1e-6))
+    print(f'ladder reduction of restore-edge second droop: {red:.1f}%')
+    return out
+
+
 if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] == 'restore_edge':
+        restore_edge_check()
+        sys.exit(0)
     wl = sys.argv[1] if len(sys.argv) > 1 else 'dhrystone'
     n_cap = int(sys.argv[2]) if len(sys.argv) > 2 else 4000  # keep the circuit sim short
 
