@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
 # VCD -> LACPo features -> block power -> cache npz -> issue npz.
-# Uses the Python 3.7 env shipped in the runtime pack (sklearn 0.20.4).
+# PYTHON must be able to unpickle the LACPo models (scikit-learn 0.20).
 #
 #   export SEGSEE_REPO=$PWD
 #   export DECOUPLINGCAP=/path/to/DecouplingCap
-#   export SEGSEE_TRACES=/opt/segsee/traces/lacpo_cy100/bench
+#   export SEGSEE_TRACES=$HOME/segsee_traces/lacpo_cy100/bench
+#   export PYTHON=/path/to/python-with-sklearn-0.20
 #   bash lab/run_trace_post.sh
 #
 # Then, still with SEGSEE_TRACES set, from SEGSEE_REPO:
-#   /opt/segsee/lacpo37/bin/python lacpo/workload.py
-#   /opt/segsee/lacpo37/bin/python lacpo/workload5.py
+#   "$PYTHON" lacpo/workload.py
+#   "$PYTHON" lacpo/workload5.py
 set -euo pipefail
-ROOT=${SEGSEE_ROOT:-/opt/segsee}
-O=${SEGSEE_TRACES:-$ROOT/traces/lacpo_cy100/bench}
+O=${SEGSEE_TRACES:-$HOME/segsee_traces/lacpo_cy100/bench}
 REPO=${SEGSEE_REPO:-$(cd "$(dirname "$0")/.." && pwd)}
 DEC=${DECOUPLINGCAP:?set DECOUPLINGCAP to the DecouplingCap tree that holds tools/run_lacpo_flow.py and BOOM/power_modeling}
-PY=$ROOT/lacpo37/bin/python
+if [ -n "${PYTHON:-}" ]; then PY=$PYTHON
+elif [ -x /opt/segsee/lacpo37/bin/python ]; then PY=/opt/segsee/lacpo37/bin/python
+else PY=$(command -v python3)
+fi
 POST_JOBS=${POST_JOBS:-3}
 WL="${WL:-qsort rsort mm dhrystone spmv multiply memcpy median vvadd towers}"
 test -x "$PY"
